@@ -1,0 +1,6 @@
+{
+  "name": "New SaaS Manager",
+  "description": "A comprehensive application for managing Software as a Service (SaaS) subscriptions, tracking costs, renewals, audits, and software requests within an organization.",
+  "requestFramePermissions": [],
+  "prompt": ""
+}
