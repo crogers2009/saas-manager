@@ -1,6 +1,26 @@
 import { Software, User, Department, FeatureTag, Audit, SoftwareRequest, DocumentFile, Integration, SMTPConfig, NotificationPreference, EmailNotification } from '../types';
 
-const API_BASE_URL = 'http://localhost:3001/api';
+// Dynamic API base URL that works in both development and production
+const getApiBaseUrl = () => {
+  // In production, use the same origin as the frontend
+  if (typeof window !== 'undefined') {
+    // Browser environment
+    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+      // Development environment
+      return 'http://localhost:3001/api';
+    } else {
+      // Production environment - use same origin with /api path
+      return `${window.location.protocol}//${window.location.host}/api`;
+    }
+  }
+  
+  // Fallback for server-side rendering or other environments
+  return process.env.NODE_ENV === 'production' 
+    ? '/api'  // Relative URL for production
+    : 'http://localhost:3001/api'; // Development fallback
+};
+
+const API_BASE_URL = getApiBaseUrl();
 
 // Generic fetch helper
 const apiRequest = async <T>(endpoint: string, options: RequestInit = {}): Promise<T> => {
