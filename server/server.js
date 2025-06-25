@@ -21,6 +21,18 @@ import emailRouter from './routes/email.js';
 const app = express();
 const PORT = process.env.PORT || 3001;
 
+// Set proper MIME types for JavaScript modules
+app.use((req, res, next) => {
+  if (req.url.endsWith('.js')) {
+    res.setHeader('Content-Type', 'application/javascript');
+  } else if (req.url.endsWith('.mjs')) {
+    res.setHeader('Content-Type', 'application/javascript');
+  } else if (req.url.endsWith('.tsx') || req.url.endsWith('.ts')) {
+    res.setHeader('Content-Type', 'application/javascript');
+  }
+  next();
+});
+
 // Middleware
 app.use(cors());
 app.use(express.json());
