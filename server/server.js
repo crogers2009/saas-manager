@@ -21,14 +21,16 @@ import emailRouter from './routes/email.js';
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-// Set proper MIME types for JavaScript modules
+// Set proper MIME types for JavaScript modules and other files
 app.use((req, res, next) => {
-  if (req.url.endsWith('.js')) {
-    res.setHeader('Content-Type', 'application/javascript');
-  } else if (req.url.endsWith('.mjs')) {
+  if (req.url.endsWith('.js') || req.url.endsWith('.mjs')) {
     res.setHeader('Content-Type', 'application/javascript');
   } else if (req.url.endsWith('.tsx') || req.url.endsWith('.ts')) {
     res.setHeader('Content-Type', 'application/javascript');
+  } else if (req.url.endsWith('.css')) {
+    res.setHeader('Content-Type', 'text/css');
+  } else if (req.url.endsWith('.html')) {
+    res.setHeader('Content-Type', 'text/html');
   }
   next();
 });
@@ -37,8 +39,16 @@ app.use((req, res, next) => {
 app.use(cors());
 app.use(express.json());
 
-// Serve static files from the dist directory
-app.use(express.static(path.join(__dirname, '../dist')));
+// Serve static files from the dist directory with proper headers
+app.use(express.static(path.join(__dirname, '../dist'), {
+  setHeaders: (res, path) => {
+    if (path.endsWith('.js') || path.endsWith('.mjs')) {
+      res.setHeader('Content-Type', 'application/javascript');
+    } else if (path.endsWith('.css')) {
+      res.setHeader('Content-Type', 'text/css');
+    }
+  }
+}));
 
 // Routes
 app.use('/api/auth', authRouter);

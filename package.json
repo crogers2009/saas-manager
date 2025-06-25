@@ -11,7 +11,8 @@
     "server": "node server/server.js",
     "build": "vite build",
     "preview": "vite preview",
-    "postinstall": "npm run build"
+    "postinstall": "npm run build",
+    "production": "NODE_ENV=production node server/server.js"
   },
   "dependencies": {
     "@types/bcryptjs": "^2.4.6",
@@ -40,5 +41,8 @@
     "@types/node": "^22.14.0",
     "@vitejs/plugin-react": "^4.5.1",
     "typescript": "~5.7.2"
+  },
+  "engines": {
+    "node": ">=18.0.0"
   }
 }
