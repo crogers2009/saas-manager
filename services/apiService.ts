@@ -20,10 +20,9 @@ const getApiBaseUrl = () => {
     : 'http://localhost:3001/api'; // Development fallback
 };
 
-const API_BASE_URL = getApiBaseUrl();
-
 // Generic fetch helper
 const apiRequest = async <T>(endpoint: string, options: RequestInit = {}): Promise<T> => {
+  const API_BASE_URL = getApiBaseUrl(); // Call it here so it's dynamic
   const url = `${API_BASE_URL}${endpoint}`;
   
   // Get current user from localStorage for authentication
@@ -122,6 +121,7 @@ export const uploadDocumentToSoftware = async (
   documentType: string,
   softwareName: string
 ): Promise<Software> => {
+  const API_BASE_URL = getApiBaseUrl(); // Call it here so it's dynamic
   const url = `${API_BASE_URL}/software/${softwareId}/documents`;
   
   // Get current user from localStorage for authentication
