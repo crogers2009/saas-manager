@@ -1,6 +1,8 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { User, UserRole, AuthContextType, LoginResponse } from '../types';
 
+import { apiRequest } from '../services/apiService';
+
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const useAuth = () => {
@@ -20,53 +22,44 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    // Check for existing session
-    const storedUser = localStorage.getItem('currentUser');
-    if (storedUser) {
+    const checkAuth = async () => {
       try {
-        setUser(JSON.parse(storedUser));
+        const data = await apiRequest<LoginResponse>('/auth/me');
+        setUser(data.user);
+        localStorage.setItem('currentUser', JSON.stringify(data.user));
       } catch (error) {
+        // If /me fails, it means the token is invalid or expired, or no token exists.
+        // Clear any stale user data.
+        setUser(null);
         localStorage.removeItem('currentUser');
+      } finally {
+        setIsLoading(false);
       }
-    }
-    setIsLoading(false);
+    };
+    checkAuth();
   }, []);
 
   const login = async (email: string, password: string): Promise<void> => {
-    try {
-      const response = await fetch('/api/auth/login', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ email, password }),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Login failed');
-      }
-
-      const data: LoginResponse = await response.json();
-      setUser(data.user);
-      localStorage.setItem('currentUser', JSON.stringify(data.user));
-      
-      if (data.token) {
-        localStorage.setItem('authToken', data.token);
-      }
-    } catch (error) {
-      throw error;
-    }
+    const data = await apiRequest<LoginResponse>('/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ email, password }),
+    });
+    setUser(data.user);
+    localStorage.setItem('currentUser', JSON.stringify(data.user));
   };
 
-  const logout = () => {
+  const logout = async () => {
+    try {
+      await apiRequest('/auth/logout', { method: 'POST' });
+    } catch (error) {
+      console.error('Logout failed:', error);
+    }
     setUser(null);
     localStorage.removeItem('currentUser');
-    localStorage.removeItem('authToken');
   };
 
   const isAuthenticated = !!user;
-  const isAdmin = user?.role === UserRole.ADMIN;
+  const isAdmin = user?.role === UserRole.Admin;
 
   if (isLoading) {
     return (
