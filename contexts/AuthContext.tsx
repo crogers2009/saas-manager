@@ -59,7 +59,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   };
 
   const isAuthenticated = !!user;
-  const isAdmin = user?.role === UserRole.Admin;
+  const isAdmin = user?.role === UserRole.ADMIN;
 
   if (isLoading) {
     return (
