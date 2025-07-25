@@ -265,8 +265,8 @@ const SoftwareDetailPage: React.FC = () => {
             <dl className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-4">
               <DetailItem label="Renewal Date" value={`${format(new Date(software.renewalDate), 'MMMM d, yyyy')} (${differenceInDays(new Date(software.renewalDate), new Date())} days)`} />
               <DetailItem label="Notice Period" value={software.noticePeriod} />
-              <DetailItem label="Contract End Date" value={format(new Date(software.contractEndDate), 'MMMM d, yyyy')} />
-              <DetailItem label="Auto-Renewal" value={software.autoRenewal ? 'Enabled' : 'Disabled'} />
+              <DetailItem label="Contract Start Date" value={format(new Date(software.contractStartDate), 'MMMM d, yyyy')} />
+              <DetailItem label="Auto-Renew" value={software.autoRenewal ? 'Yes' : 'No'} />
             </dl>
           </Card>
 

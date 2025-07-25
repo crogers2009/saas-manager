@@ -130,7 +130,9 @@ const SoftwareForm: React.FC<SoftwareFormProps> = ({ initialSoftware, onSubmit, 
     }
   }, [initialSoftware]);
 
-  const userOptions: SelectOption[] = users.map(u => ({ value: u.id, label: u.name }));
+  const userOptions: SelectOption[] = users
+    .filter(u => u.role === 'Software Owner' || u.role === 'Department Head')
+    .map(u => ({ value: u.id, label: u.name }));
   const departmentOptions: SelectOption[] = departments.map(d => ({ value: d.id, label: d.name }));
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {

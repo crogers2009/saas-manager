@@ -40,16 +40,20 @@ export const createSoftwareFilter = (user) => {
       };
     
     case 'Department Head':
-      // Department heads can only see software used by their department
+      // Department heads can see software they own OR software used by their department
       if (!user.departmentId) {
-        return { whereClause: 'WHERE 1 = 0', params: [] }; // No results if no department
+        // If no department, they can still see software they own
+        return { 
+          whereClause: 'WHERE s.owner_id = ?', 
+          params: [user.id] 
+        };
       }
       return { 
-        whereClause: `WHERE EXISTS (
+        whereClause: `WHERE s.owner_id = ? OR EXISTS (
           SELECT 1 FROM software_departments sd 
           WHERE sd.software_id = s.id AND sd.department_id = ?
         )`, 
-        params: [user.departmentId] 
+        params: [user.id, user.departmentId] 
       };
     
     default:
