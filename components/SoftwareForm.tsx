@@ -11,7 +11,7 @@ import TagInput from './TagInput';
 import FileUpload from './FileUpload';
 import Badge from './Badge';
 import VendorAutocomplete, { VendorInfo } from './VendorAutocomplete';
-import { getUsers, getDepartments, getFeatureTags, addFeatureTag as apiAddFeatureTag, getSoftware } from '../services/apiService';
+import { getUsers, getDepartments, getFeatureTags, addFeatureTag as apiAddFeatureTag, getSoftwareList } from '../services/apiService';
 import { DEFAULT_NOTICE_PERIODS, DEFAULT_PAYMENT_FREQUENCIES, DEFAULT_SOFTWARE_STATUSES, DEFAULT_DOCUMENT_TYPES, DEFAULT_LICENSE_TYPES, DEFAULT_AUDIT_FREQUENCIES, PlusIcon, TrashIcon } from '../constants';
 
 interface SoftwareFormProps {
@@ -73,7 +73,7 @@ const SoftwareForm: React.FC<SoftwareFormProps> = ({ initialSoftware, onSubmit, 
           getUsers(), 
           getDepartments(), 
           getFeatureTags(),
-          getSoftware()
+          getSoftwareList()
         ]);
         setUsers(u);
         setDepartments(d);
