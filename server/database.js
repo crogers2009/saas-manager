@@ -55,10 +55,10 @@ export const initializeDatabase = () => {
         cost REAL NOT NULL,
         payment_frequency TEXT NOT NULL,
         status TEXT NOT NULL,
+        contract_start_date TEXT NOT NULL,
         renewal_date TEXT NOT NULL,
         notice_period TEXT NOT NULL,
         auto_renewal BOOLEAN NOT NULL,
-        contract_end_date TEXT NOT NULL,
         purchased_by_seat BOOLEAN,
         seats_purchased INTEGER,
         seats_utilized INTEGER,
@@ -291,6 +291,7 @@ const runMigrations = () => {
           const hasSupportWebsite = swColumns.some(col => col.name === 'support_website');
           const hasSupportEmail = swColumns.some(col => col.name === 'support_email');
           const hasAuditFrequency = swColumns.some(col => col.name === 'audit_frequency');
+          const hasContractStartDate = swColumns.some(col => col.name === 'contract_start_date');
           
           let licenseMigrationsNeeded = [];
           
@@ -326,6 +327,9 @@ const runMigrations = () => {
           }
           if (!hasAuditFrequency) {
             licenseMigrationsNeeded.push("ALTER TABLE software ADD COLUMN audit_frequency TEXT DEFAULT 'Quarterly'");
+          }
+          if (!hasContractStartDate) {
+            licenseMigrationsNeeded.push("ALTER TABLE software ADD COLUMN contract_start_date TEXT DEFAULT '2024-01-01'");
           }
           
           if (licenseMigrationsNeeded.length > 0) {

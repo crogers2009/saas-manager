@@ -3,6 +3,7 @@ import cors from 'cors';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { initializeDatabase, seedDatabase } from './database.js';
+import cookieParser from 'cookie-parser';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -17,6 +18,7 @@ import requestsRouter from './routes/requests.js';
 import auditsRouter from './routes/audits.js';
 import dashboardRouter from './routes/dashboard.js';
 import emailRouter from './routes/email.js';
+import { authenticateUser, isAdmin } from './middleware/auth.js';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -36,8 +38,9 @@ app.use((req, res, next) => {
 });
 
 // Middleware
-app.use(cors());
+app.use(cors({ origin: 'http://localhost:5173', credentials: true }));
 app.use(express.json());
+app.use(cookieParser());
 
 // Serve static files from the dist directory with proper headers
 app.use(express.static(path.join(__dirname, '../dist'), {
@@ -52,14 +55,14 @@ app.use(express.static(path.join(__dirname, '../dist'), {
 
 // Routes
 app.use('/api/auth', authRouter);
-app.use('/api/users', usersRouter);
-app.use('/api/departments', departmentsRouter);
-app.use('/api/feature-tags', featureTagsRouter);
-app.use('/api/software', softwareRouter);
-app.use('/api/requests', requestsRouter);
-app.use('/api/audits', auditsRouter);
-app.use('/api/dashboard', dashboardRouter);
-app.use('/api/email', emailRouter);
+app.use('/api/users', authenticateUser, isAdmin, usersRouter);
+app.use('/api/departments', authenticateUser, isAdmin, departmentsRouter);
+app.use('/api/feature-tags', authenticateUser, featureTagsRouter);
+app.use('/api/software', authenticateUser, softwareRouter);
+app.use('/api/requests', authenticateUser, requestsRouter);
+app.use('/api/audits', authenticateUser, auditsRouter);
+app.use('/api/dashboard', authenticateUser, dashboardRouter);
+app.use('/api/email', authenticateUser, isAdmin, emailRouter);
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {

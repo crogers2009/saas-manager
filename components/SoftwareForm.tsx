@@ -10,7 +10,8 @@ import Card from './Card';
 import TagInput from './TagInput';
 import FileUpload from './FileUpload';
 import Badge from './Badge';
-import { getUsers, getDepartments, getFeatureTags, addFeatureTag as apiAddFeatureTag } from '../services/apiService';
+import VendorAutocomplete, { VendorInfo } from './VendorAutocomplete';
+import { getUsers, getDepartments, getFeatureTags, addFeatureTag as apiAddFeatureTag, getSoftware } from '../services/apiService';
 import { DEFAULT_NOTICE_PERIODS, DEFAULT_PAYMENT_FREQUENCIES, DEFAULT_SOFTWARE_STATUSES, DEFAULT_DOCUMENT_TYPES, DEFAULT_LICENSE_TYPES, DEFAULT_AUDIT_FREQUENCIES, PlusIcon, TrashIcon } from '../constants';
 
 interface SoftwareFormProps {
@@ -32,10 +33,10 @@ const SoftwareForm: React.FC<SoftwareFormProps> = ({ initialSoftware, onSubmit, 
       paymentFrequency: PaymentFrequency.MONTHLY,
       status: SoftwareStatus.ACTIVE,
       featureTagIds: [],
+      contractStartDate: new Date().toISOString().split('T')[0],
       renewalDate: new Date().toISOString().split('T')[0],
       noticePeriod: NoticePeriod.DAYS_30,
       autoRenewal: false,
-      contractEndDate: new Date().toISOString().split('T')[0],
       integrations: [],
       documents: [],
       licenseType: LicenseType.PER_USER_SEAT,
@@ -56,6 +57,7 @@ const SoftwareForm: React.FC<SoftwareFormProps> = ({ initialSoftware, onSubmit, 
   const [users, setUsers] = useState<User[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]);
   const [featureTags, setFeatureTags] = useState<FeatureTag[]>([]);
+  const [existingVendors, setExistingVendors] = useState<VendorInfo[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [errors, setErrors] = useState<Partial<Record<keyof Software, string>>>({});
   
@@ -67,10 +69,31 @@ const SoftwareForm: React.FC<SoftwareFormProps> = ({ initialSoftware, onSubmit, 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [u, d, ft] = await Promise.all([getUsers(), getDepartments(), getFeatureTags()]);
+        const [u, d, ft, allSoftware] = await Promise.all([
+          getUsers(), 
+          getDepartments(), 
+          getFeatureTags(),
+          getSoftware()
+        ]);
         setUsers(u);
         setDepartments(d);
         setFeatureTags(ft);
+        
+        // Extract unique vendors with their contact information
+        const vendorMap = new Map<string, VendorInfo>();
+        allSoftware.forEach(software => {
+          if (software.vendor && !vendorMap.has(software.vendor)) {
+            vendorMap.set(software.vendor, {
+              vendor: software.vendor,
+              accountExecutive: software.accountExecutive,
+              accountExecutiveEmail: software.accountExecutiveEmail,
+              supportWebsite: software.supportWebsite,
+              supportEmail: software.supportEmail,
+            });
+          }
+        });
+        setExistingVendors(Array.from(vendorMap.values()));
+        
         if (initialSoftware?.ownerId && !u.find(user => user.id === initialSoftware.ownerId)) {
             setFormData(prev => ({...prev, ownerId: u[0]?.id || ''}))
         } else if (!initialSoftware && u.length > 0) {
@@ -88,8 +111,8 @@ const SoftwareForm: React.FC<SoftwareFormProps> = ({ initialSoftware, onSubmit, 
     if (initialSoftware) {
       setFormData({
         ...initialSoftware,
+        contractStartDate: initialSoftware.contractStartDate ? new Date(initialSoftware.contractStartDate).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
         renewalDate: initialSoftware.renewalDate ? new Date(initialSoftware.renewalDate).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
-        contractEndDate: initialSoftware.contractEndDate ? new Date(initialSoftware.contractEndDate).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
         licenseType: initialSoftware.licenseType || LicenseType.PER_USER_SEAT,
         seatsPurchased: initialSoftware.seatsPurchased,
         seatsUtilized: initialSoftware.seatsUtilized,
@@ -135,6 +158,25 @@ const SoftwareForm: React.FC<SoftwareFormProps> = ({ initialSoftware, onSubmit, 
         }));
     } else {
         setFormData(prev => ({ ...prev, [name]: value }));
+    }
+  };
+
+  const handleVendorChange = (vendor: string, vendorInfo?: VendorInfo) => {
+    setFormData(prev => ({
+      ...prev,
+      vendor,
+      // Auto-fill contact information if vendor exists
+      ...(vendorInfo ? {
+        accountExecutive: vendorInfo.accountExecutive || prev.accountExecutive,
+        accountExecutiveEmail: vendorInfo.accountExecutiveEmail || prev.accountExecutiveEmail,
+        supportWebsite: vendorInfo.supportWebsite || prev.supportWebsite,
+        supportEmail: vendorInfo.supportEmail || prev.supportEmail,
+      } : {})
+    }));
+    
+    // Clear vendor error when selection is made
+    if (errors.vendor) {
+      setErrors(prev => ({ ...prev, vendor: undefined }));
     }
   };
 
@@ -210,8 +252,8 @@ const SoftwareForm: React.FC<SoftwareFormProps> = ({ initialSoftware, onSubmit, 
     if (!formData.vendor?.trim()) newErrors.vendor = "Vendor is required.";
     if (!formData.ownerId) newErrors.ownerId = "Owner is required.";
     if (formData.cost === undefined || formData.cost < 0) newErrors.cost = "Cost must be a non-negative number.";
+    if (!formData.contractStartDate) newErrors.contractStartDate = "Contract start date is required.";
     if (!formData.renewalDate) newErrors.renewalDate = "Renewal date is required.";
-    if (!formData.contractEndDate) newErrors.contractEndDate = "Contract end date is required.";
     if (!formData.licenseType) newErrors.licenseType = "License type is required.";
 
     // License type specific validation
@@ -263,10 +305,10 @@ const SoftwareForm: React.FC<SoftwareFormProps> = ({ initialSoftware, onSubmit, 
         paymentFrequency: formData.paymentFrequency || PaymentFrequency.MONTHLY,
         status: formData.status || SoftwareStatus.ACTIVE,
         featureTagIds: formData.featureTagIds || [],
+        contractStartDate: new Date(formData.contractStartDate || new Date()).toISOString(),
         renewalDate: new Date(formData.renewalDate || new Date()).toISOString(),
         noticePeriod: formData.noticePeriod || NoticePeriod.DAYS_30,
         autoRenewal: formData.autoRenewal || false,
-        contractEndDate: new Date(formData.contractEndDate || new Date()).toISOString(),
         integrations: formData.integrations || [],
         documents: formData.documents || [],
         licenseType: formData.licenseType || LicenseType.PER_USER_SEAT,
@@ -298,7 +340,14 @@ const SoftwareForm: React.FC<SoftwareFormProps> = ({ initialSoftware, onSubmit, 
       <Card title="Basic Information" className="mb-6">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <Input label="Software Name" name="name" value={formData.name || ''} onChange={handleChange} error={errors.name} required />
-          <Input label="Vendor" name="vendor" value={formData.vendor || ''} onChange={handleChange} error={errors.vendor} required />
+          <VendorAutocomplete 
+            label="Vendor" 
+            value={formData.vendor || ''} 
+            onChange={handleVendorChange} 
+            error={errors.vendor} 
+            required 
+            existingVendors={existingVendors}
+          />
         </div>
         <Textarea label="Description" name="description" value={formData.description || ''} onChange={handleChange} />
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -493,16 +542,16 @@ const SoftwareForm: React.FC<SoftwareFormProps> = ({ initialSoftware, onSubmit, 
         />
       </Card>
 
-      <Card title="Renewal Information" className="mb-6">
+      <Card title="Contract Information" className="mb-6">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <Input label="Contract Start Date" name="contractStartDate" type="date" value={formData.contractStartDate || ''} onChange={handleChange} error={errors.contractStartDate} required />
           <Input label="Renewal Date" name="renewalDate" type="date" value={formData.renewalDate || ''} onChange={handleChange} error={errors.renewalDate} required />
-          <Select label="Notice Period Required" name="noticePeriod" value={formData.noticePeriod} onChange={handleChange} options={DEFAULT_NOTICE_PERIODS} />
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
-            <Input label="Contract End Date" name="contractEndDate" type="date" value={formData.contractEndDate || ''} onChange={handleChange} error={errors.contractEndDate} required />
-            <div className="flex items-center pt-6">
-                <input id="autoRenewal" name="autoRenewal" type="checkbox" checked={formData.autoRenewal || false} onChange={handleChange} className="h-4 w-4 text-brand-blue border-gray-300 rounded focus:ring-brand-blue" />
-                <label htmlFor="autoRenewal" className="ml-2 block text-sm text-text-primary">Auto-Renewal Enabled</label>
+          <Select label="Notice Period Required" name="noticePeriod" value={formData.noticePeriod} onChange={handleChange} options={DEFAULT_NOTICE_PERIODS} />
+          <div className="flex items-center pt-6">
+            <input id="autoRenewal" name="autoRenewal" type="checkbox" checked={formData.autoRenewal || false} onChange={handleChange} className="h-4 w-4 text-brand-blue border-gray-300 rounded focus:ring-brand-blue" />
+            <label htmlFor="autoRenewal" className="ml-2 block text-sm text-text-primary">Auto-Renew?</label>
             </div>
         </div>
       </Card>

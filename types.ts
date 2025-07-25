@@ -118,10 +118,10 @@ export interface Software {
   paymentFrequency: PaymentFrequency;
   status: SoftwareStatus;
   featureTagIds: string[]; // FeatureTag IDs
-  renewalDate: string; // ISO date string
+  contractStartDate: string; // ISO date string
+  renewalDate: string; // ISO date string (combines renewal date and contract end date)
   noticePeriod: NoticePeriod;
   autoRenewal: boolean;
-  contractEndDate: string; // ISO date string
   integrations: Integration[];
   documents: DocumentFile[];
   licenseType: LicenseType;

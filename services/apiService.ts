@@ -21,29 +21,19 @@ const getApiBaseUrl = () => {
 };
 
 // Generic fetch helper
-const apiRequest = async <T>(endpoint: string, options: RequestInit = {}): Promise<T> => {
+export const apiRequest = async <T>(endpoint: string, options: RequestInit = {}): Promise<T> => {
   const API_BASE_URL = getApiBaseUrl(); // Call it here so it's dynamic
   const url = `${API_BASE_URL}${endpoint}`;
   
-  // Get current user from localStorage for authentication
-  const currentUser = localStorage.getItem('currentUser');
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     ...options.headers,
   };
   
-  if (currentUser) {
-    try {
-      const user = JSON.parse(currentUser);
-      headers['x-user-id'] = user.id;
-    } catch (error) {
-      console.error('Error parsing current user:', error);
-    }
-  }
-  
   const response = await fetch(url, {
-    headers,
     ...options,
+    headers,
+    credentials: 'include',
   });
 
   if (!response.ok) {
@@ -124,19 +114,6 @@ export const uploadDocumentToSoftware = async (
   const API_BASE_URL = getApiBaseUrl(); // Call it here so it's dynamic
   const url = `${API_BASE_URL}/software/${softwareId}/documents`;
   
-  // Get current user from localStorage for authentication
-  const currentUser = localStorage.getItem('currentUser');
-  const headers: Record<string, string> = {};
-  
-  if (currentUser) {
-    try {
-      const user = JSON.parse(currentUser);
-      headers['x-user-id'] = user.id;
-    } catch (error) {
-      console.error('Error parsing current user:', error);
-    }
-  }
-  
   // Create FormData for file upload
   const formData = new FormData();
   formData.append('file', file);
@@ -146,8 +123,8 @@ export const uploadDocumentToSoftware = async (
   
   const response = await fetch(url, {
     method: 'POST',
-    headers, // Don't set Content-Type, let browser set it with boundary for multipart
     body: formData,
+    credentials: 'include',
   });
 
   if (!response.ok) {

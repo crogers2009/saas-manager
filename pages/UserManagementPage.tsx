@@ -6,10 +6,11 @@ import Button from '../components/Button';
 import Modal from '../components/Modal';
 import Input from '../components/Input';
 import Select from '../components/Select';
+import { getUsers, getDepartments, apiRequest } from '../services/apiService';
 import LoadingSpinner from '../components/LoadingSpinner';
 
 const UserManagementPage: React.FC = () => {
-  const { isAdmin } = useAuth();
+  const { user } = useAuth(); // Replaced isAdmin with user
   const [users, setUsers] = useState<User[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]);
   const [loading, setLoading] = useState(true);
@@ -25,11 +26,6 @@ const UserManagementPage: React.FC = () => {
   });
   const [error, setError] = useState('');
 
-  // Redirect if not admin
-  if (!isAdmin) {
-    return <Navigate to="/" replace />;
-  }
-
   useEffect(() => {
     fetchUsers();
     fetchDepartments();
@@ -37,11 +33,8 @@ const UserManagementPage: React.FC = () => {
 
   const fetchUsers = async () => {
     try {
-      const response = await fetch('http://localhost:3001/api/users');
-      if (response.ok) {
-        const usersData = await response.json();
-        setUsers(usersData);
-      }
+      const usersData = await getUsers();
+      setUsers(usersData);
     } catch (error) {
       console.error('Error fetching users:', error);
     } finally {
@@ -51,11 +44,8 @@ const UserManagementPage: React.FC = () => {
 
   const fetchDepartments = async () => {
     try {
-      const response = await fetch('http://localhost:3001/api/departments');
-      if (response.ok) {
-        const departmentsData = await response.json();
-        setDepartments(departmentsData);
-      }
+      const departmentsData = await getDepartments();
+      setDepartments(departmentsData);
     } catch (error) {
       console.error('Error fetching departments:', error);
     }
@@ -66,29 +56,18 @@ const UserManagementPage: React.FC = () => {
     setError('');
 
     try {
-      const url = editingUser 
-        ? `http://localhost:3001/api/users/${editingUser.id}`
-        : 'http://localhost:3001/api/users';
-      
+      const url = editingUser ? `/users/${editingUser.id}` : '/users';
       const method = editingUser ? 'PUT' : 'POST';
       
-      const response = await fetch(url, {
+      await apiRequest(url, {
         method,
-        headers: {
-          'Content-Type': 'application/json',
-        },
         body: JSON.stringify(formData),
       });
 
-      if (response.ok) {
-        await fetchUsers();
-        handleCloseModal();
-      } else {
-        const errorData = await response.json();
-        setError(errorData.error || 'Failed to save user');
-      }
-    } catch (error) {
-      setError('Failed to save user');
+      await fetchUsers();
+      handleCloseModal();
+    } catch (error: any) {
+      setError(error.message || 'Failed to save user');
     }
   };
 
@@ -109,15 +88,8 @@ const UserManagementPage: React.FC = () => {
     if (!confirm('Are you sure you want to delete this user?')) return;
 
     try {
-      const response = await fetch(`http://localhost:3001/api/users/${userId}`, {
-        method: 'DELETE',
-      });
-
-      if (response.ok) {
-        await fetchUsers();
-      } else {
-        alert('Failed to delete user');
-      }
+      await apiRequest(`/users/${userId}`, { method: 'DELETE' });
+      await fetchUsers();
     } catch (error) {
       alert('Failed to delete user');
     }

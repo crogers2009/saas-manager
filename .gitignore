@@ -143,3 +143,6 @@ public/uploads/
 .dockerignore
 Dockerfile*
 docker-compose*.yml
+
+# Config files
+server/config.js

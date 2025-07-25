@@ -180,7 +180,7 @@ const getSoftwareWithRelations = (softwareId, callback) => {
               renewalDate: software.renewal_date,
               noticePeriod: software.notice_period,
               autoRenewal: Boolean(software.auto_renewal),
-              contractEndDate: software.contract_end_date,
+              contractStartDate: software.contract_start_date,
               integrations: software.integrations,
               documents: software.documents,
               licenseType: software.license_type || 'Per User/Seat',
@@ -279,7 +279,7 @@ router.post('/', authenticateUser, (req, res) => {
   const {
     name, vendor, description, ownerId, departmentIds = [], cost,
     paymentFrequency, status, featureTagIds = [], renewalDate,
-    noticePeriod, autoRenewal, contractEndDate, licenseType,
+    noticePeriod, autoRenewal, contractStartDate, licenseType,
     seatsPurchased, seatsUtilized, usageMetric, usageLimit,
     currentUsage, sitesLicensed, licenseNotes, accountExecutive,
     accountExecutiveEmail, supportWebsite, supportEmail, auditFrequency
@@ -290,13 +290,13 @@ router.post('/', authenticateUser, (req, res) => {
   db.serialize(() => {
     db.run(`INSERT INTO software (
       id, name, vendor, description, owner_id, cost, payment_frequency,
-      status, renewal_date, notice_period, auto_renewal, contract_end_date,
+      status, contract_start_date, renewal_date, notice_period, auto_renewal,
       license_type, seats_purchased, seats_utilized, usage_metric, usage_limit,
       current_usage, sites_licensed, license_notes, account_executive,
       account_executive_email, support_website, support_email, audit_frequency
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, 
     [id, name, vendor, description, ownerId, cost, paymentFrequency, status,
-     renewalDate, noticePeriod, autoRenewal, contractEndDate, licenseType,
+     contractStartDate, renewalDate, noticePeriod, autoRenewal, licenseType,
      seatsPurchased, seatsUtilized, usageMetric, usageLimit, currentUsage,
      sitesLicensed, licenseNotes, accountExecutive, accountExecutiveEmail,
      supportWebsite, supportEmail, auditFrequency], async (err) => {
@@ -364,7 +364,7 @@ router.put('/:id', authenticateUser, (req, res) => {
     renewalDate: 'renewal_date',
     noticePeriod: 'notice_period',
     autoRenewal: 'auto_renewal',
-    contractEndDate: 'contract_end_date',
+    contractStartDate: 'contract_start_date',
     licenseType: 'license_type',
     seatsPurchased: 'seats_purchased',
     seatsUtilized: 'seats_utilized',

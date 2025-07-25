@@ -39,10 +39,10 @@ export const MOCK_SOFTWARE: Software[] = [
     paymentFrequency: PaymentFrequency.MONTHLY,
     status: SoftwareStatus.ACTIVE,
     featureTagIds: ['tag-1'],
+    contractStartDate: new Date(new Date().getFullYear() - 1, new Date().getMonth() + 2, 15).toISOString(),
     renewalDate: new Date(new Date().getFullYear(), new Date().getMonth() + 2, 15).toISOString(),
     noticePeriod: NoticePeriod.DAYS_60,
     autoRenewal: true,
-    contractEndDate: new Date(new Date().getFullYear() + 1, new Date().getMonth() + 2, 14).toISOString(),
     integrations: [
       { id: 'int-1', externalIntegrationName: 'Slack', notes: 'Notifications for new issues.' },
       { id: 'int-2', externalIntegrationName: 'GitHub', notes: 'Commit linking.' }
@@ -66,10 +66,10 @@ export const MOCK_SOFTWARE: Software[] = [
     paymentFrequency: PaymentFrequency.MONTHLY,
     status: SoftwareStatus.ACTIVE,
     featureTagIds: ['tag-2', 'tag-6'],
+    contractStartDate: new Date(new Date().getFullYear() - 2, new Date().getMonth() + 1, 1).toISOString(),
     renewalDate: new Date(new Date().getFullYear(), new Date().getMonth() + 1, 1).toISOString(),
     noticePeriod: NoticePeriod.DAYS_90,
     autoRenewal: true,
-    contractEndDate: new Date(new Date().getFullYear() + 2, new Date().getMonth() + 1, 0).toISOString(),
     integrations: [
       { id: 'int-3', externalIntegrationName: 'Marketo', notes: 'Lead sync.' }
     ],
@@ -91,10 +91,10 @@ export const MOCK_SOFTWARE: Software[] = [
     paymentFrequency: PaymentFrequency.MONTHLY,
     status: SoftwareStatus.ACTIVE,
     featureTagIds: ['tag-5'],
+    contractStartDate: new Date(new Date().getFullYear() - 1, new Date().getMonth() + 4, 10).toISOString(),
     renewalDate: new Date(new Date().getFullYear(), new Date().getMonth() + 4, 10).toISOString(),
     noticePeriod: NoticePeriod.DAYS_30,
     autoRenewal: false,
-    contractEndDate: new Date(new Date().getFullYear() + 1, new Date().getMonth() + 4, 9).toISOString(),
     integrations: [],
     documents: [],
     purchasedBySeat: true,
@@ -112,10 +112,10 @@ export const MOCK_SOFTWARE: Software[] = [
     paymentFrequency: PaymentFrequency.ANNUALLY,
     status: SoftwareStatus.ACTIVE,
     featureTagIds: ['tag-4'],
+    contractStartDate: new Date(new Date().getFullYear() - 1, new Date().getMonth() + 0, 20).toISOString(),
     renewalDate: new Date(new Date().getFullYear(), new Date().getMonth() + 0, 20).toISOString(), // Renewal soon
     noticePeriod: NoticePeriod.DAYS_30,
     autoRenewal: true,
-    contractEndDate: new Date(new Date().getFullYear() + 0, new Date().getMonth() + 0, 19).toISOString(),
     integrations: [],
     documents: [],
     purchasedBySeat: false, // Example of non-seat based

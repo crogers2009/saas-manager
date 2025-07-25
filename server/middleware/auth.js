@@ -1,40 +1,28 @@
+import jwt from 'jsonwebtoken';
 import { db } from '../database.js';
+import { JWT_SECRET } from '../config.js';
 
-// Simple authentication middleware for demo purposes
-// In a real app, you'd use JWT tokens or similar
 export const authenticateUser = (req, res, next) => {
-  const userId = req.headers['x-user-id'];
-  
-  if (!userId) {
+  const token = req.cookies.token;
+
+  if (!token) {
     return res.status(401).json({ error: 'Authentication required' });
   }
 
-  // Get user from database
-  db.get(
-    'SELECT id, name, email, role, department_id FROM users WHERE id = ? AND is_active = 1',
-    [userId],
-    (err, user) => {
-      if (err) {
-        console.error('Database error:', err);
-        return res.status(500).json({ error: 'Internal server error' });
-      }
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET);
+    req.user = decoded;
+    next();
+  } catch (error) {
+    return res.status(401).json({ error: 'Invalid or expired token' });
+  }
+};
 
-      if (!user) {
-        return res.status(401).json({ error: 'Invalid user' });
-      }
-
-      // Transform database fields to match frontend expectations
-      req.user = {
-        id: user.id,
-        name: user.name,
-        email: user.email,
-        role: user.role,
-        departmentId: user.department_id
-      };
-
-      next();
-    }
-  );
+export const isAdmin = (req, res, next) => {
+  if (req.user.role !== 'Administrator') {
+    return res.status(403).json({ error: 'Forbidden: Admins only' });
+  }
+  next();
 };
 
 // Middleware to filter software based on user role
