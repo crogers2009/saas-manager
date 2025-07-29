@@ -1,4 +1,4 @@
-import { Software, User, Department, FeatureTag, Audit, SoftwareRequest, DocumentFile, Integration, SMTPConfig, NotificationPreference, EmailNotification } from '../types';
+import { Software, User, Department, FeatureTag, Audit, SoftwareRequest, DocumentFile, Integration, SMTPConfig, NotificationPreference, EmailNotification, ContractHistory, CostCenter } from '../types';
 
 // Dynamic API base URL that works in both development and production
 const getApiBaseUrl = () => {
@@ -95,6 +95,23 @@ export const deleteSoftware = (id: string): Promise<{ message: string }> =>
   apiRequest<{ message: string }>(`/software/${id}`, {
     method: 'DELETE',
   });
+
+export const renewContract = (id: string, renewalData: {
+  contractStartDate: string;
+  renewalDate: string;
+  cost: number;
+  paymentFrequency: string;
+  noticePeriod: string;
+  autoRenewal: boolean;
+  notes?: string;
+}): Promise<{ message: string; software: Software }> =>
+  apiRequest<{ message: string; software: Software }>(`/software/${id}/renew`, {
+    method: 'POST',
+    body: JSON.stringify(renewalData),
+  });
+
+export const getContractHistory = (id: string): Promise<ContractHistory[]> =>
+  apiRequest<ContractHistory[]>(`/software/${id}/contract-history`);
 
 // --- Documents for Software ---
 export const addDocumentToSoftware = (softwareId: string, documentData: Omit<DocumentFile, 'id'>): Promise<Software> =>
@@ -227,3 +244,32 @@ export const sendTestEmail = (recipientEmail: string): Promise<{ success: boolea
     method: 'POST',
     body: JSON.stringify({ recipientEmail }),
   });
+
+// --- Cost Centers ---
+export const getCostCenters = (): Promise<CostCenter[]> => apiRequest<CostCenter[]>('/cost-centers');
+export const getCostCenterById = (id: string): Promise<CostCenter> => apiRequest<CostCenter>(`/cost-centers/${id}`);
+export const createCostCenter = (costCenter: Omit<CostCenter, 'id' | 'createdAt' | 'updatedAt'>): Promise<CostCenter> =>
+  apiRequest<CostCenter>('/cost-centers', {
+    method: 'POST',
+    body: JSON.stringify(costCenter),
+  });
+export const updateCostCenter = (id: string, costCenter: Partial<CostCenter>): Promise<CostCenter> =>
+  apiRequest<CostCenter>(`/cost-centers/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(costCenter),
+  });
+export const deleteCostCenter = (id: string): Promise<{ message: string }> =>
+  apiRequest<{ message: string }>(`/cost-centers/${id}`, {
+    method: 'DELETE',
+  });
+
+// --- Auto-Renewal ---
+export const getUpcomingRenewals = (days?: number): Promise<any[]> => {
+  const params = days ? `?days=${days}` : '';
+  return apiRequest<any[]>(`/auto-renewal/upcoming${params}`);
+};
+export const triggerAutoRenewal = (): Promise<{ message: string; renewedCount: number; totalProcessed: number; results: any[] }> =>
+  apiRequest<{ message: string; renewedCount: number; totalProcessed: number; results: any[] }>('/auto-renewal/trigger', {
+    method: 'POST',
+  });
+export const getAutoRenewalStatus = (): Promise<any> => apiRequest<any>('/auto-renewal/status');

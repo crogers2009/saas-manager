@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, ChangeEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Software, User, Department, FeatureTag, SelectOption, SoftwareStatus, PaymentFrequency, NoticePeriod, DocumentFile, DocumentType, Integration, LicenseType, AuditFrequency } from '../types';
+import { Software, User, Department, FeatureTag, SelectOption, SoftwareStatus, PaymentFrequency, NoticePeriod, DocumentFile, DocumentType, Integration, LicenseType, AuditFrequency, UserRole, CostCenter } from '../types';
 import Input from './Input';
 import Textarea from './Textarea';
 import Select from './Select';
@@ -10,9 +10,13 @@ import Card from './Card';
 import TagInput from './TagInput';
 import FileUpload from './FileUpload';
 import Badge from './Badge';
+import Modal from './Modal';
+import CurrencyInput from './CurrencyInput';
 import VendorAutocomplete, { VendorInfo } from './VendorAutocomplete';
-import { getUsers, getDepartments, getFeatureTags, addFeatureTag as apiAddFeatureTag, getSoftwareList } from '../services/apiService';
+import CostCenterAutocomplete from './CostCenterAutocomplete';
+import { getUsers, getDepartments, getFeatureTags, addFeatureTag as apiAddFeatureTag, getSoftwareList, apiRequest, getCostCenters } from '../services/apiService';
 import { DEFAULT_NOTICE_PERIODS, DEFAULT_PAYMENT_FREQUENCIES, DEFAULT_SOFTWARE_STATUSES, DEFAULT_DOCUMENT_TYPES, DEFAULT_LICENSE_TYPES, DEFAULT_AUDIT_FREQUENCIES, PlusIcon, TrashIcon } from '../constants';
+import { dateInputToISOString } from '../utils/dateUtils';
 
 interface SoftwareFormProps {
   initialSoftware?: Software;
@@ -58,6 +62,15 @@ const SoftwareForm: React.FC<SoftwareFormProps> = ({ initialSoftware, onSubmit, 
   const [departments, setDepartments] = useState<Department[]>([]);
   const [featureTags, setFeatureTags] = useState<FeatureTag[]>([]);
   const [existingVendors, setExistingVendors] = useState<VendorInfo[]>([]);
+  const [costCenters, setCostCenters] = useState<CostCenter[]>([]);
+  
+  // User creation state
+  const [showUserModal, setShowUserModal] = useState(false);
+  const [userFormData, setUserFormData] = useState({
+    name: '',
+    email: ''
+  });
+  const [userError, setUserError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [errors, setErrors] = useState<Partial<Record<keyof Software, string>>>({});
   
@@ -69,15 +82,17 @@ const SoftwareForm: React.FC<SoftwareFormProps> = ({ initialSoftware, onSubmit, 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [u, d, ft, allSoftware] = await Promise.all([
+        const [u, d, ft, allSoftware, cc] = await Promise.all([
           getUsers(), 
           getDepartments(), 
           getFeatureTags(),
-          getSoftwareList()
+          getSoftwareList(),
+          getCostCenters()
         ]);
         setUsers(u);
         setDepartments(d);
         setFeatureTags(ft);
+        setCostCenters(cc);
         
         // Extract unique vendors with their contact information
         const vendorMap = new Map<string, VendorInfo>();
@@ -111,8 +126,8 @@ const SoftwareForm: React.FC<SoftwareFormProps> = ({ initialSoftware, onSubmit, 
     if (initialSoftware) {
       setFormData({
         ...initialSoftware,
-        contractStartDate: initialSoftware.contractStartDate ? new Date(initialSoftware.contractStartDate).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
-        renewalDate: initialSoftware.renewalDate ? new Date(initialSoftware.renewalDate).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+        contractStartDate: initialSoftware.contractStartDate ? initialSoftware.contractStartDate.split('T')[0] : new Date().toISOString().split('T')[0],
+        renewalDate: initialSoftware.renewalDate ? initialSoftware.renewalDate.split('T')[0] : new Date().toISOString().split('T')[0],
         licenseType: initialSoftware.licenseType || LicenseType.PER_USER_SEAT,
         seatsPurchased: initialSoftware.seatsPurchased,
         seatsUtilized: initialSoftware.seatsUtilized,
@@ -182,6 +197,18 @@ const SoftwareForm: React.FC<SoftwareFormProps> = ({ initialSoftware, onSubmit, 
     }
   };
 
+  const handleCostCenterChange = (costCenterCode: string) => {
+    setFormData(prev => ({
+      ...prev,
+      costCenterCode
+    }));
+    
+    // Clear cost center error when selection is made
+    if (errors.costCenterCode) {
+      setErrors(prev => ({ ...prev, costCenterCode: undefined }));
+    }
+  };
+
   const handleMultiSelectChange = (name: keyof Software, selectedId: string) => {
     setFormData(prev => {
       const currentValues = (prev[name] as string[] || []);
@@ -247,6 +274,60 @@ const SoftwareForm: React.FC<SoftwareFormProps> = ({ initialSoftware, onSubmit, 
     setFormData(prev => ({ ...prev, integrations: prev.integrations?.filter(i => i.id !== intId) }));
   };
 
+  const handleCreateSoftwareOwner = () => {
+    setUserFormData({ name: '', email: '' });
+    setUserError('');
+    setShowUserModal(true);
+  };
+
+  const handleUserEmailChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    let email = e.target.value;
+    setUserFormData(prev => ({ ...prev, email }));
+  };
+
+  const handleUserEmailBlur = (e: React.FocusEvent<HTMLInputElement>) => {
+    let email = e.target.value;
+    
+    // Auto-append domain on blur if user typed just a username
+    if (email && !email.includes('@')) {
+      email = email + '@firstacceptance.com';
+      setUserFormData(prev => ({ ...prev, email }));
+    }
+  };
+
+  const handleUserSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setUserError('');
+
+    if (!userFormData.name.trim() || !userFormData.email.trim()) {
+      setUserError('Name and email are required');
+      return;
+    }
+
+    try {
+      const newUser = await apiRequest('/users', {
+        method: 'POST',
+        body: JSON.stringify({
+          name: userFormData.name,
+          email: userFormData.email,
+          role: UserRole.SOFTWARE_OWNER,
+          password: 'firstacceptance',
+          isActive: true
+        })
+      });
+
+      // Refresh users list and select the new user
+      const updatedUsers = await getUsers();
+      setUsers(updatedUsers);
+      setFormData(prev => ({ ...prev, ownerId: newUser.id }));
+      
+      setShowUserModal(false);
+      setUserFormData({ name: '', email: '' });
+      alert('Software Owner created successfully! They will be prompted to change their password on first login.');
+    } catch (err) {
+      setUserError(err instanceof Error ? err.message : 'Failed to create user');
+    }
+  };
 
   const validateForm = (): boolean => {
     const newErrors: Partial<Record<keyof Software, string>> = {};
@@ -307,8 +388,8 @@ const SoftwareForm: React.FC<SoftwareFormProps> = ({ initialSoftware, onSubmit, 
         paymentFrequency: formData.paymentFrequency || PaymentFrequency.MONTHLY,
         status: formData.status || SoftwareStatus.ACTIVE,
         featureTagIds: formData.featureTagIds || [],
-        contractStartDate: new Date(formData.contractStartDate || new Date()).toISOString(),
-        renewalDate: new Date(formData.renewalDate || new Date()).toISOString(),
+        contractStartDate: dateInputToISOString(formData.contractStartDate || ''),
+        renewalDate: dateInputToISOString(formData.renewalDate || ''),
         noticePeriod: formData.noticePeriod || NoticePeriod.DAYS_30,
         autoRenewal: formData.autoRenewal || false,
         integrations: formData.integrations || [],
@@ -326,6 +407,7 @@ const SoftwareForm: React.FC<SoftwareFormProps> = ({ initialSoftware, onSubmit, 
         supportWebsite: formData.supportWebsite || undefined,
         supportEmail: formData.supportEmail || undefined,
         auditFrequency: formData.auditFrequency || AuditFrequency.QUARTERLY,
+        costCenterCode: formData.costCenterCode || undefined,
       };
       await onSubmit(completeFormData);
       navigate(isEditMode && initialSoftware ? `/software/${initialSoftware.id}` : '/software');
@@ -353,7 +435,22 @@ const SoftwareForm: React.FC<SoftwareFormProps> = ({ initialSoftware, onSubmit, 
         </div>
         <Textarea label="Description" name="description" value={formData.description || ''} onChange={handleChange} />
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <Select label="Primary Owner" name="ownerId" value={formData.ownerId || ''} onChange={handleChange} options={userOptions} error={errors.ownerId} placeholder="Select owner" required />
+          <div>
+            <div className="flex items-end space-x-2">
+              <div className="flex-1">
+                <Select label="Primary Owner" name="ownerId" value={formData.ownerId || ''} onChange={handleChange} options={userOptions} error={errors.ownerId} placeholder="Select owner" required />
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={handleCreateSoftwareOwner}
+                className="mb-1"
+              >
+                <PlusIcon className="w-4 h-4" />
+              </Button>
+            </div>
+          </div>
           <div>
             <label className="block text-sm font-medium text-text-secondary mb-1">Departments Using It</label>
             <div className="max-h-32 overflow-y-auto border border-gray-300 rounded-md p-2 space-y-1">
@@ -371,10 +468,20 @@ const SoftwareForm: React.FC<SoftwareFormProps> = ({ initialSoftware, onSubmit, 
           </div>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
-          <Input label="Total Cost" name="cost" type="number" value={formData.cost || ''} onChange={handleChange} error={errors.cost} required step="0.01" />
+          <CurrencyInput label="Total Cost (Inclusive of Taxes)" name="cost" value={formData.cost || 0} onChange={handleChange} error={errors.cost} required />
           <Select label="Payment Frequency" name="paymentFrequency" value={formData.paymentFrequency} onChange={handleChange} options={DEFAULT_PAYMENT_FREQUENCIES} />
         </div>
-         <Select label="Status" name="status" value={formData.status} onChange={handleChange} options={DEFAULT_SOFTWARE_STATUSES} className="mt-4" />
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
+          <CostCenterAutocomplete 
+            label="Cost Center" 
+            value={formData.costCenterCode || ''} 
+            onChange={handleCostCenterChange} 
+            costCenters={costCenters}
+            error={errors.costCenterCode} 
+            placeholder="Type cost center code or name..."
+          />
+          <Select label="Status" name="status" value={formData.status} onChange={handleChange} options={DEFAULT_SOFTWARE_STATUSES} />
+        </div>
       </Card>
 
       <Card title="License Information" className="mb-6">
@@ -601,6 +708,58 @@ const SoftwareForm: React.FC<SoftwareFormProps> = ({ initialSoftware, onSubmit, 
           {isEditMode ? 'Save Changes' : 'Add Software'}
         </Button>
       </div>
+
+      <Modal
+        isOpen={showUserModal}
+        onClose={() => setShowUserModal(false)}
+        title="Create Software Owner"
+      >
+        <form onSubmit={handleUserSubmit} className="space-y-4">
+          <div className="bg-blue-50 border border-blue-200 text-blue-700 px-4 py-3 rounded">
+            <p className="text-sm">
+              Creating a new Software Owner user.
+            </p>
+            <p className="text-xs mt-1">
+              Default password will be "firstacceptance". User will be required to change it on first login.
+            </p>
+          </div>
+
+          <Input
+            label="Full Name"
+            value={userFormData.name}
+            onChange={(e) => setUserFormData(prev => ({ ...prev, name: e.target.value }))}
+            placeholder="Enter full name"
+            required
+          />
+
+          <Input
+            label="Email"
+            type="email"
+            value={userFormData.email}
+            onChange={handleUserEmailChange}
+            onBlur={handleUserEmailBlur}
+            placeholder="username (will auto-complete to @firstacceptance.com)"
+            required
+          />
+
+          {userError && (
+            <div className="text-red-600 text-sm">{userError}</div>
+          )}
+
+          <div className="flex justify-end space-x-3 pt-4">
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => setShowUserModal(false)}
+            >
+              Cancel
+            </Button>
+            <Button type="submit">
+              Create Software Owner
+            </Button>
+          </div>
+        </form>
+      </Modal>
     </form>
   );
 };

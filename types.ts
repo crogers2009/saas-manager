@@ -66,16 +66,23 @@ export enum NotificationType {
   UTILIZATION_WARNING = 'Utilization Warning',
 }
 
+export enum ContractStatus {
+  ACTIVE = 'Active',
+  EXPIRED = 'Expired',
+  RENEWED = 'Renewed',
+}
+
 export interface User {
   id: string;
   name: string;
   email: string;
   role: UserRole;
-  departmentId?: string; // For Department Heads
+  departmentIds?: string[]; // For Department Heads (can manage multiple departments)
   password?: string; // Only for creation/updates, not returned in responses
   createdAt?: string;
   lastLogin?: string;
   isActive?: boolean;
+  mustChangePassword?: boolean; // For forcing password change on first login
 }
 
 export interface Department {
@@ -107,6 +114,20 @@ export interface Integration {
   notes: string;
 }
 
+export interface ContractHistory {
+  id: string;
+  softwareId: string;
+  contractStartDate: string; // ISO date string
+  contractEndDate: string; // ISO date string (when this contract period ended)
+  cost: number;
+  paymentFrequency: PaymentFrequency;
+  noticePeriod: NoticePeriod;
+  autoRenewal: boolean;
+  status: ContractStatus;
+  createdAt: string; // ISO date string - when this history entry was created
+  notes?: string; // Optional notes about the renewal/changes
+}
+
 export interface Software {
   id: string;
   name: string;
@@ -124,6 +145,7 @@ export interface Software {
   autoRenewal: boolean;
   integrations: Integration[];
   documents: DocumentFile[];
+  contractHistory: ContractHistory[];
   licenseType: LicenseType;
   // Per User/Seat licensing
   seatsPurchased?: number;
@@ -143,6 +165,8 @@ export interface Software {
   supportEmail?: string; // Support email address
   // Audit Scheduling
   auditFrequency: AuditFrequency; // How often audits should be scheduled
+  // Cost Center
+  costCenterCode?: string; // Cost center code for budget allocation
 }
 
 export interface SoftwareRequest {
@@ -239,6 +263,17 @@ export interface SMTPConfig {
   fromName: string;
   isActive: boolean;
   testEmailSent?: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// Cost Center for budget allocation
+export interface CostCenter {
+  id: string;
+  code: string; // Alphanumeric code (e.g., "CC001", "SALES", "MARKETING")
+  name: string; // Descriptive name (e.g., "Sales Department", "Marketing Operations")
+  description?: string; // Optional description
+  isActive: boolean;
   createdAt: string;
   updatedAt: string;
 }

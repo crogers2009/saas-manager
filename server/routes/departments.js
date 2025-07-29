@@ -6,7 +6,7 @@ const router = express.Router();
 
 // Get all departments
 router.get('/', (req, res) => {
-  db.all("SELECT * FROM departments", (err, rows) => {
+  db.all("SELECT * FROM departments ORDER BY name", (err, rows) => {
     if (err) {
       res.status(500).json({ error: err.message });
       return;

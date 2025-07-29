@@ -8,26 +8,55 @@ const router = express.Router();
 // Get all users (without password hashes)
 router.get('/', (req, res) => {
   db.all(
-    "SELECT id, name, email, role, department_id, created_at, last_login, is_active FROM users ORDER BY name",
+    "SELECT id, name, email, role, created_at, last_login, is_active, must_change_password FROM users ORDER BY name",
     (err, rows) => {
       if (err) {
         res.status(500).json({ error: err.message });
         return;
       }
       
-      // Transform database fields to match frontend expectations
-      const users = rows.map(row => ({
-        id: row.id,
-        name: row.name,
-        email: row.email,
-        role: row.role,
-        departmentId: row.department_id,
-        createdAt: row.created_at,
-        lastLogin: row.last_login,
-        isActive: Boolean(row.is_active)
-      }));
+      // Get department relationships for all users
+      const userIds = rows.map(row => row.id);
+      if (userIds.length === 0) {
+        res.json([]);
+        return;
+      }
       
-      res.json(users);
+      const placeholders = userIds.map(() => '?').join(',');
+      db.all(
+        `SELECT user_id, department_id FROM user_departments WHERE user_id IN (${placeholders})`,
+        userIds,
+        (err, deptRows) => {
+          if (err) {
+            res.status(500).json({ error: err.message });
+            return;
+          }
+          
+          // Group departments by user
+          const userDepartments = {};
+          deptRows.forEach(row => {
+            if (!userDepartments[row.user_id]) {
+              userDepartments[row.user_id] = [];
+            }
+            userDepartments[row.user_id].push(row.department_id);
+          });
+          
+          // Transform database fields to match frontend expectations
+          const users = rows.map(row => ({
+            id: row.id,
+            name: row.name,
+            email: row.email,
+            role: row.role,
+            departmentIds: userDepartments[row.id] || [],
+            createdAt: row.created_at,
+            lastLogin: row.last_login,
+            isActive: Boolean(row.is_active),
+            mustChangePassword: Boolean(row.must_change_password)
+          }));
+          
+          res.json(users);
+        }
+      );
     }
   );
 });
@@ -36,7 +65,7 @@ router.get('/', (req, res) => {
 router.get('/:id', (req, res) => {
   const { id } = req.params;
   db.get(
-    "SELECT id, name, email, role, department_id, created_at, last_login, is_active FROM users WHERE id = ?",
+    "SELECT id, name, email, role, created_at, last_login, is_active, must_change_password FROM users WHERE id = ?",
     [id],
     (err, row) => {
       if (err) {
@@ -48,28 +77,41 @@ router.get('/:id', (req, res) => {
         return;
       }
       
-      const user = {
-        id: row.id,
-        name: row.name,
-        email: row.email,
-        role: row.role,
-        departmentId: row.department_id,
-        createdAt: row.created_at,
-        lastLogin: row.last_login,
-        isActive: Boolean(row.is_active)
-      };
-      
-      res.json(user);
+      // Get department relationships for this user
+      db.all(
+        "SELECT department_id FROM user_departments WHERE user_id = ?",
+        [id],
+        (err, deptRows) => {
+          if (err) {
+            res.status(500).json({ error: err.message });
+            return;
+          }
+          
+          const user = {
+            id: row.id,
+            name: row.name,
+            email: row.email,
+            role: row.role,
+            departmentIds: deptRows.map(dept => dept.department_id),
+            createdAt: row.created_at,
+            lastLogin: row.last_login,
+            isActive: Boolean(row.is_active),
+            mustChangePassword: Boolean(row.must_change_password)
+          };
+          
+          res.json(user);
+        }
+      );
     }
   );
 });
 
 // Create new user
 router.post('/', async (req, res) => {
-  const { name, email, role, password, departmentId, isActive = true } = req.body;
+  const { name, email, role, password = 'firstacceptance', departmentIds = [], isActive = true } = req.body;
 
-  if (!name || !email || !role || !password) {
-    return res.status(400).json({ error: 'Name, email, role, and password are required' });
+  if (!name || !email || !role) {
+    return res.status(400).json({ error: 'Name, email, and role are required' });
   }
 
   try {
@@ -90,12 +132,21 @@ router.post('/', async (req, res) => {
         const createdAt = new Date().toISOString();
 
         db.run(
-          'INSERT INTO users (id, name, email, role, department_id, password_hash, created_at, is_active) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-          [id, name, email, role, departmentId, passwordHash, createdAt, isActive ? 1 : 0],
+          'INSERT INTO users (id, name, email, role, password_hash, created_at, is_active, must_change_password) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+          [id, name, email, role, passwordHash, createdAt, isActive ? 1 : 0, 1],
           function(err) {
             if (err) {
               console.error('Error creating user:', err);
               return res.status(500).json({ error: 'Failed to create user' });
+            }
+
+            // Insert department relationships if any
+            if (departmentIds.length > 0) {
+              const deptStmt = db.prepare("INSERT INTO user_departments (user_id, department_id) VALUES (?, ?)");
+              departmentIds.forEach(deptId => {
+                deptStmt.run(id, deptId);
+              });
+              deptStmt.finalize();
             }
 
             const newUser = {
@@ -103,10 +154,11 @@ router.post('/', async (req, res) => {
               name,
               email,
               role,
-              departmentId,
+              departmentIds,
               createdAt,
               lastLogin: null,
-              isActive
+              isActive,
+              mustChangePassword: true
             };
 
             res.status(201).json(newUser);
@@ -126,7 +178,7 @@ router.post('/', async (req, res) => {
 // Update user
 router.put('/:id', async (req, res) => {
   const { id } = req.params;
-  const { name, email, role, password, departmentId, isActive } = req.body;
+  const { name, email, role, password, departmentIds, isActive } = req.body;
 
   try {
     // Build dynamic update query
@@ -144,10 +196,6 @@ router.put('/:id', async (req, res) => {
     if (role !== undefined) {
       fields.push('role = ?');
       values.push(role);
-    }
-    if (departmentId !== undefined) {
-      fields.push('department_id = ?');
-      values.push(departmentId);
     }
     if (isActive !== undefined) {
       fields.push('is_active = ?');
@@ -180,29 +228,64 @@ router.put('/:id', async (req, res) => {
           return res.status(404).json({ error: 'User not found' });
         }
 
-        // Return updated user
-        db.get(
-          'SELECT id, name, email, role, department_id, created_at, last_login, is_active FROM users WHERE id = ?',
-          [id],
-          (err, row) => {
+        // Update department relationships if provided
+        if (departmentIds !== undefined) {
+          db.run("DELETE FROM user_departments WHERE user_id = ?", [id], (err) => {
             if (err) {
-              return res.status(500).json({ error: 'Failed to fetch updated user' });
+              return res.status(500).json({ error: 'Failed to update department relationships' });
             }
+            
+            if (departmentIds.length > 0) {
+              const deptStmt = db.prepare("INSERT INTO user_departments (user_id, department_id) VALUES (?, ?)");
+              departmentIds.forEach(deptId => {
+                deptStmt.run(id, deptId);
+              });
+              deptStmt.finalize();
+            }
+            
+            returnUpdatedUser();
+          });
+        } else {
+          returnUpdatedUser();
+        }
+        
+        function returnUpdatedUser() {
+          // Return updated user
+          db.get(
+            'SELECT id, name, email, role, created_at, last_login, is_active, must_change_password FROM users WHERE id = ?',
+            [id],
+            (err, row) => {
+              if (err) {
+                return res.status(500).json({ error: 'Failed to fetch updated user' });
+              }
 
-            const updatedUser = {
-              id: row.id,
-              name: row.name,
-              email: row.email,
-              role: row.role,
-              departmentId: row.department_id,
-              createdAt: row.created_at,
-              lastLogin: row.last_login,
-              isActive: Boolean(row.is_active)
-            };
+              // Get department relationships
+              db.all(
+                "SELECT department_id FROM user_departments WHERE user_id = ?",
+                [id],
+                (err, deptRows) => {
+                  if (err) {
+                    return res.status(500).json({ error: 'Failed to fetch user departments' });
+                  }
+                  
+                  const updatedUser = {
+                    id: row.id,
+                    name: row.name,
+                    email: row.email,
+                    role: row.role,
+                    departmentIds: deptRows.map(dept => dept.department_id),
+                    createdAt: row.created_at,
+                    lastLogin: row.last_login,
+                    isActive: Boolean(row.is_active),
+                    mustChangePassword: Boolean(row.must_change_password)
+                  };
 
-            res.json(updatedUser);
-          }
-        );
+                  res.json(updatedUser);
+                }
+              );
+            }
+          );
+        }
       }
     );
   } catch (error) {
@@ -227,6 +310,36 @@ router.delete('/:id', (req, res) => {
 
     res.json({ message: 'User deleted successfully' });
   });
+});
+
+// Reset user password
+router.post('/:id/reset-password', async (req, res) => {
+  const { id } = req.params;
+  const defaultPassword = 'firstacceptance';
+
+  try {
+    const passwordHash = await bcrypt.hash(defaultPassword, 10);
+    
+    db.run(
+      'UPDATE users SET password_hash = ?, must_change_password = 1 WHERE id = ?',
+      [passwordHash, id],
+      function(err) {
+        if (err) {
+          console.error('Error resetting password:', err);
+          return res.status(500).json({ error: 'Failed to reset password' });
+        }
+
+        if (this.changes === 0) {
+          return res.status(404).json({ error: 'User not found' });
+        }
+
+        res.json({ message: 'Password reset successfully. User will be prompted to change password on next login.' });
+      }
+    );
+  } catch (error) {
+    console.error('Password reset error:', error);
+    res.status(500).json({ error: 'Failed to reset password' });
+  }
 });
 
 export default router;

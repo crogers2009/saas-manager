@@ -40,20 +40,16 @@ export const createSoftwareFilter = (user) => {
       };
     
     case 'Department Head':
-      // Department heads can see software they own OR software used by their department
-      if (!user.departmentId) {
-        // If no department, they can still see software they own
-        return { 
-          whereClause: 'WHERE s.owner_id = ?', 
-          params: [user.id] 
-        };
-      }
+      // Department heads can see software they own OR software used by any of their departments
+      // Since this function is synchronous, we'll need to handle departments in the calling code
+      // For now, return a filter that allows software they own
       return { 
         whereClause: `WHERE s.owner_id = ? OR EXISTS (
           SELECT 1 FROM software_departments sd 
-          WHERE sd.software_id = s.id AND sd.department_id = ?
+          JOIN user_departments ud ON sd.department_id = ud.department_id
+          WHERE sd.software_id = s.id AND ud.user_id = ?
         )`, 
-        params: [user.id, user.departmentId] 
+        params: [user.id, user.id] 
       };
     
     default:

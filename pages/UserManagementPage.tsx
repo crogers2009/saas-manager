@@ -20,8 +20,8 @@ const UserManagementPage: React.FC = () => {
     name: '',
     email: '',
     role: UserRole.SOFTWARE_OWNER,
-    password: '',
-    departmentId: '',
+    password: 'firstacceptance',
+    departmentIds: [],
     isActive: true,
   });
   const [error, setError] = useState('');
@@ -78,7 +78,7 @@ const UserManagementPage: React.FC = () => {
       email: user.email,
       role: user.role,
       password: '',
-      departmentId: user.departmentId || '',
+      departmentIds: user.departmentIds || [],
       isActive: user.isActive ?? true,
     });
     setIsModalOpen(true);
@@ -95,6 +95,40 @@ const UserManagementPage: React.FC = () => {
     }
   };
 
+  const handleResetPassword = async (userId: string) => {
+    if (!confirm('Are you sure you want to reset this user\'s password to the default? They will be required to change it on next login.')) return;
+
+    try {
+      await apiRequest(`/users/${userId}/reset-password`, { method: 'POST' });
+      await fetchUsers();
+      alert('Password reset successfully. User will be prompted to change password on next login.');
+    } catch (error) {
+      alert('Failed to reset password');
+    }
+  };
+
+  const handleEmailChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    let email = e.target.value;
+    
+    // Auto-append domain if user types just a username
+    if (email && !email.includes('@') && e.nativeEvent instanceof KeyboardEvent && 
+        (e.nativeEvent.key === 'Tab' || e.nativeEvent.key === 'Enter')) {
+      email = email + '@firstacceptance.com';
+    }
+    
+    setFormData({ ...formData, email });
+  };
+
+  const handleEmailBlur = (e: React.FocusEvent<HTMLInputElement>) => {
+    let email = e.target.value;
+    
+    // Auto-append domain on blur if user typed just a username
+    if (email && !email.includes('@')) {
+      email = email + '@firstacceptance.com';
+      setFormData({ ...formData, email });
+    }
+  };
+
   const handleCloseModal = () => {
     setIsModalOpen(false);
     setEditingUser(null);
@@ -102,8 +136,8 @@ const UserManagementPage: React.FC = () => {
       name: '',
       email: '',
       role: UserRole.SOFTWARE_OWNER,
-      password: '',
-      departmentId: '',
+      password: 'firstacceptance',
+      departmentIds: [],
       isActive: true,
     });
     setError('');
@@ -115,8 +149,8 @@ const UserManagementPage: React.FC = () => {
       name: '',
       email: '',
       role: UserRole.SOFTWARE_OWNER,
-      password: '',
-      departmentId: '',
+      password: 'firstacceptance',
+      departmentIds: [],
       isActive: true,
     });
     setIsModalOpen(true);
@@ -144,7 +178,7 @@ const UserManagementPage: React.FC = () => {
 
       <div className="bg-white shadow overflow-hidden sm:rounded-md">
         <ul className="divide-y divide-gray-200">
-          {users.map((user) => (
+          {users.sort((a, b) => a.name.localeCompare(b.name)).map((user) => (
             <li key={user.id}>
               <div className="px-4 py-4 flex items-center justify-between">
                 <div className="flex items-center">
@@ -178,6 +212,13 @@ const UserManagementPage: React.FC = () => {
                       onClick={() => handleEdit(user)}
                     >
                       Edit
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleResetPassword(user.id)}
+                    >
+                      Reset Password
                     </Button>
                     <Button
                       variant="danger"
@@ -218,7 +259,9 @@ const UserManagementPage: React.FC = () => {
             label="Email"
             type="email"
             value={formData.email}
-            onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+            onChange={handleEmailChange}
+            onBlur={handleEmailBlur}
+            placeholder="username (will auto-complete to @firstacceptance.com)"
             required
           />
 
@@ -234,24 +277,44 @@ const UserManagementPage: React.FC = () => {
           />
 
           {formData.role === UserRole.DEPARTMENT_HEAD && (
-            <Select
-              label="Department"
-              value={formData.departmentId}
-              onChange={(e) => setFormData({ ...formData, departmentId: e.target.value })}
-              options={[
-                { value: '', label: 'Select Department' },
-                ...departments.map(dept => ({ value: dept.id, label: dept.name }))
-              ]}
-              required
-            />
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Departments</label>
+              <div className="max-h-32 overflow-y-auto border border-gray-300 rounded-md p-2 space-y-1">
+                {departments.map(dept => (
+                  <label key={dept.id} className="flex items-center">
+                    <input
+                      type="checkbox"
+                      checked={formData.departmentIds.includes(dept.id)}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setFormData(prev => ({ 
+                            ...prev, 
+                            departmentIds: [...prev.departmentIds, dept.id] 
+                          }));
+                        } else {
+                          setFormData(prev => ({ 
+                            ...prev, 
+                            departmentIds: prev.departmentIds.filter(id => id !== dept.id) 
+                          }));
+                        }
+                      }}
+                      className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                    />
+                    <span className="ml-2 text-sm text-gray-900">{dept.name}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
           )}
 
           <Input
-            label={editingUser ? "New Password (leave blank to keep current)" : "Password"}
+            label={editingUser ? "New Password (leave blank to keep current)" : "Default Password"}
             type="password"
             value={formData.password}
             onChange={(e) => setFormData({ ...formData, password: e.target.value })}
             required={!editingUser}
+            placeholder={!editingUser ? "Default: firstacceptance (user will be required to change)" : ""}
+            readOnly={!editingUser}
           />
 
           <div className="flex items-center">

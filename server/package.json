@@ -1,0 +1,33 @@
+{
+  "name": "saas-manager-backend",
+  "version": "1.0.0",
+  "description": "SaaS Manager Backend API",
+  "main": "server.js",
+  "type": "module",
+  "scripts": {
+    "start": "NODE_ENV=production node server.js",
+    "dev": "nodemon server.js",
+    "production": "NODE_ENV=production node server.js"
+  },
+  "dependencies": {
+    "bcryptjs": "^3.0.2",
+    "cookie-parser": "^1.4.7",
+    "cors": "^2.8.5",
+    "express": "^4.21.2",
+    "jsonwebtoken": "^9.0.2",
+    "multer": "^2.0.1",
+    "node-cron": "^3.0.3",
+    "nodemailer": "^7.0.3",
+    "sqlite3": "^5.1.7",
+    "uuid": "^11.1.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.10"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "keywords": ["saas", "management", "api", "express", "sqlite"],
+  "author": "Your Company",
+  "license": "Private"
+}

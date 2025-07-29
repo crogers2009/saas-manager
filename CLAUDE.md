@@ -20,12 +20,14 @@ This is a React-based SaaS management application built with Vite and TypeScript
 
 All application state is managed through localStorage with mock data initialization via `services/apiService.ts`. The main entities include:
 
-- **Software**: Complete subscription records with vendor info, costs, renewal dates, integrations, and documents
+- **Software**: Complete subscription records with vendor info, costs, renewal dates, integrations, documents, and cost center assignments
 - **Users**: Role-based (Admin, Software Owner, Department Head) with ownership assignments
 - **Departments**: Organizational units for software allocation
+- **Cost Centers**: Financial accounting codes for organizing software expenses
 - **Requests**: Software procurement requests (specific software or general needs)
 - **Audits**: Scheduled reviews of software usage and compliance
 - **Feature Tags**: Categorization system for software capabilities
+- **Contract History**: Complete audit trail of all contract renewals and changes
 
 ### Route Structure
 
@@ -37,6 +39,8 @@ The app uses HashRouter with the following main routes:
 - `/renewals` - Renewal tracking and notifications
 - `/audits` - Audit scheduling and tracking
 - `/overlap` - Feature overlap analysis between software
+- `/cost-centers` - Cost center management (admin only)
+- `/auto-renewal` - Automatic renewal management and monitoring (admin only)
 
 ### Data Management
 
@@ -58,3 +62,6 @@ The app uses HashRouter with the following main routes:
 - Backend runs on port 3001, frontend on default Vite port (5173)
 - SQLite database automatically initialized and seeded on first run
 - All API endpoints use RESTful conventions with `/api` prefix
+- Automatic contract renewal system runs daily via cron scheduler
+- Cost centers provide financial tracking and expense organization
+- Contract history maintains complete audit trail of all changes

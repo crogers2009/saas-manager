@@ -4,8 +4,8 @@ import { Link } from 'react-router-dom';
 import { Software, Department, User, FeatureTag, SoftwareStatus, PaymentFrequency, LicenseType } from '../types';
 import Badge from './Badge';
 import Button from './Button'; // Added import for Button
-import { format } from 'date-fns';
 import { SoftwareIcon, EditIcon, TrashIcon } from '../constants'; // Assuming icons are in constants
+import { formatDateSafely } from '../utils/dateUtils';
 
 interface SoftwareListItemProps {
   software: Software;
@@ -76,7 +76,7 @@ const SoftwareListItem: React.FC<SoftwareListItemProps> = ({ software, departmen
         </div>
         <div>
           <p className="font-medium text-text-primary">Renewal Date</p>
-          <p className="text-text-secondary">{format(new Date(software.renewalDate), 'MMM d, yyyy')}</p>
+          <p className="text-text-secondary">{formatDateSafely(software.renewalDate, 'MMM d, yyyy')}</p>
         </div>
         <div>
           <p className="font-medium text-text-primary">Departments</p>

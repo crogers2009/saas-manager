@@ -172,6 +172,31 @@ export const initializeDatabase = () => {
         UNIQUE(user_id, notification_type)
       )`);
 
+      // Contract History table
+      db.run(`CREATE TABLE IF NOT EXISTS contract_history (
+        id TEXT PRIMARY KEY,
+        software_id TEXT NOT NULL,
+        contract_start_date TEXT NOT NULL,
+        contract_end_date TEXT NOT NULL,
+        cost REAL NOT NULL,
+        payment_frequency TEXT NOT NULL,
+        notice_period TEXT NOT NULL,
+        auto_renewal BOOLEAN NOT NULL,
+        status TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        notes TEXT,
+        FOREIGN KEY (software_id) REFERENCES software(id) ON DELETE CASCADE
+      )`);
+
+      // User departments (many-to-many for department heads)
+      db.run(`CREATE TABLE IF NOT EXISTS user_departments (
+        user_id TEXT,
+        department_id TEXT,
+        PRIMARY KEY (user_id, department_id),
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+        FOREIGN KEY (department_id) REFERENCES departments(id) ON DELETE CASCADE
+      )`);
+
       // Email Notifications Queue/Log table
       db.run(`CREATE TABLE IF NOT EXISTS email_notifications (
         id TEXT PRIMARY KEY,
@@ -185,6 +210,17 @@ export const initializeDatabase = () => {
         status TEXT NOT NULL DEFAULT 'pending',
         error_message TEXT,
         created_at TEXT NOT NULL
+      )`);
+
+      // Cost Centers table
+      db.run(`CREATE TABLE IF NOT EXISTS cost_centers (
+        id TEXT PRIMARY KEY,
+        code TEXT NOT NULL UNIQUE,
+        name TEXT NOT NULL,
+        description TEXT,
+        is_active BOOLEAN NOT NULL DEFAULT 1,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
       )`, (err) => {
         if (err) {
           reject(err);
@@ -429,10 +465,181 @@ const runMigrations = () => {
               });
               
               console.log('Migration completed: Added audit tracking fields to audits table');
-              resolve();
+              runPasswordMigration();
             });
           } else {
             console.log('Migration check: audit columns already exist');
+            runPasswordMigration();
+          }
+        });
+      }
+
+      function runPasswordMigration() {
+        // Check if must_change_password column exists in users table
+        db.all("PRAGMA table_info(users)", (err, userColumns) => {
+          if (err) {
+            reject(err);
+            return;
+          }
+          
+          const hasMustChangePassword = userColumns.some(col => col.name === 'must_change_password');
+          
+          if (!hasMustChangePassword) {
+            console.log('Adding must_change_password column to users table...');
+            db.run("ALTER TABLE users ADD COLUMN must_change_password BOOLEAN DEFAULT 0", (err) => {
+              if (err) {
+                console.error('Password migration error:', err);
+                reject(err);
+                return;
+              }
+              console.log('Migration completed: Added must_change_password to users table');
+              runUserDepartmentsMigration();
+            });
+          } else {
+            console.log('Migration check: must_change_password column already exists');
+            runUserDepartmentsMigration();
+          }
+        });
+      }
+
+      function runUserDepartmentsMigration() {
+        // Check if we need to migrate data from users.department_id to user_departments table
+        db.get("SELECT COUNT(*) as count FROM user_departments", (err, result) => {
+          if (err) {
+            reject(err);
+            return;
+          }
+          
+          // If the table is empty, migrate existing department_id data
+          if (result.count === 0) {
+            console.log('Migrating user department data to user_departments table...');
+            
+            db.all("SELECT id, department_id FROM users WHERE department_id IS NOT NULL AND department_id != ''", (err, users) => {
+              if (err) {
+                console.error('User departments migration error:', err);
+                reject(err);
+                return;
+              }
+              
+              if (users.length > 0) {
+                const stmt = db.prepare("INSERT INTO user_departments (user_id, department_id) VALUES (?, ?)");
+                
+                users.forEach(user => {
+                  stmt.run(user.id, user.department_id);
+                });
+                
+                stmt.finalize((err) => {
+                  if (err) {
+                    console.error('User departments migration error:', err);
+                    reject(err);
+                    return;
+                  }
+                  console.log(`Migration completed: Migrated ${users.length} user department relationships`);
+                  runContractEndDateMigration();
+                });
+              } else {
+                console.log('Migration check: No user department data to migrate');
+                runContractEndDateMigration();
+              }
+            });
+          } else {
+            console.log('Migration check: user_departments table already populated');
+            runContractEndDateMigration();
+          }
+        });
+      }
+
+      function runContractEndDateMigration() {
+        // Check if contract_end_date column exists and remove it since we use renewal_date now
+        db.all("PRAGMA table_info(software)", (err, columns) => {
+          if (err) {
+            reject(err);
+            return;
+          }
+          
+          const hasContractEndDate = columns.some(col => col.name === 'contract_end_date');
+          
+          if (hasContractEndDate) {
+            console.log('Removing deprecated contract_end_date column from software table...');
+            
+            // SQLite doesn't support DROP COLUMN, so we need to recreate the table
+            db.serialize(() => {
+              // Create temporary table with new structure
+              db.run(`CREATE TABLE software_new (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                vendor TEXT NOT NULL,
+                description TEXT,
+                owner_id TEXT NOT NULL,
+                cost REAL NOT NULL,
+                payment_frequency TEXT NOT NULL,
+                status TEXT NOT NULL,
+                contract_start_date TEXT NOT NULL,
+                renewal_date TEXT NOT NULL,
+                notice_period TEXT NOT NULL,
+                auto_renewal BOOLEAN NOT NULL,
+                license_type TEXT DEFAULT 'Per User/Seat',
+                seats_purchased INTEGER,
+                seats_utilized INTEGER,
+                usage_metric TEXT,
+                usage_limit INTEGER,
+                current_usage INTEGER,
+                sites_licensed INTEGER,
+                license_notes TEXT,
+                account_executive TEXT,
+                account_executive_email TEXT,
+                support_website TEXT,
+                support_email TEXT,
+                audit_frequency TEXT DEFAULT 'Quarterly',
+                FOREIGN KEY (owner_id) REFERENCES users(id)
+              )`);
+              
+              // Copy data from old table to new table
+              db.run(`INSERT INTO software_new SELECT 
+                id, name, vendor, description, owner_id, cost, payment_frequency, status,
+                contract_start_date, renewal_date, notice_period, auto_renewal, license_type,
+                seats_purchased, seats_utilized, usage_metric, usage_limit, current_usage,
+                sites_licensed, license_notes, account_executive, account_executive_email,
+                support_website, support_email, audit_frequency
+                FROM software`);
+              
+              // Drop old table and rename new table
+              db.run("DROP TABLE software");
+              db.run("ALTER TABLE software_new RENAME TO software");
+              
+              console.log('Migration completed: Removed contract_end_date column from software table');
+              runCostCenterMigration();
+            });
+          } else {
+            console.log('Migration check: contract_end_date column already removed');
+            runCostCenterMigration();
+          }
+        });
+      }
+
+      function runCostCenterMigration() {
+        // Check if cost_center_code column exists in software table
+        db.all("PRAGMA table_info(software)", (err, columns) => {
+          if (err) {
+            reject(err);
+            return;
+          }
+          
+          const hasCostCenterCode = columns.some(col => col.name === 'cost_center_code');
+          
+          if (!hasCostCenterCode) {
+            console.log('Adding cost_center_code column to software table...');
+            db.run("ALTER TABLE software ADD COLUMN cost_center_code TEXT", (err) => {
+              if (err) {
+                console.error('Cost center migration error:', err);
+                reject(err);
+                return;
+              }
+              console.log('Migration completed: Added cost_center_code column to software table');
+              resolve();
+            });
+          } else {
+            console.log('Migration check: cost_center_code column already exists');
             resolve();
           }
         });
@@ -488,6 +695,22 @@ export const seedDatabase = async () => {
           deptStmt.run(dept.id, dept.name);
         });
         deptStmt.finalize();
+
+        // Insert cost centers
+        const costCenters = [
+          { id: 'cc-1', code: 'ENG001', name: 'Engineering Department', description: 'Software development and infrastructure' },
+          { id: 'cc-2', code: 'MKT001', name: 'Marketing Department', description: 'Marketing and advertising operations' },
+          { id: 'cc-3', code: 'SAL001', name: 'Sales Department', description: 'Sales and customer acquisition' },
+          { id: 'cc-4', code: 'HRD001', name: 'Human Resources', description: 'HR and employee management' },
+          { id: 'cc-5', code: 'OPS001', name: 'Operations', description: 'General business operations' },
+          { id: 'cc-6', code: 'FIN001', name: 'Finance', description: 'Accounting and financial operations' }
+        ];
+
+        const ccStmt = db.prepare("INSERT INTO cost_centers (id, code, name, description, is_active, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)");
+        costCenters.forEach(cc => {
+          ccStmt.run(cc.id, cc.code, cc.name, cc.description, 1, createdAt, createdAt);
+        });
+        ccStmt.finalize();
 
         // Insert feature tags
         const featureTags = [

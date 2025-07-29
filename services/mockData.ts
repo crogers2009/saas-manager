@@ -47,6 +47,7 @@ export const MOCK_SOFTWARE: Software[] = [
       { id: 'int-1', externalIntegrationName: 'Slack', notes: 'Notifications for new issues.' },
       { id: 'int-2', externalIntegrationName: 'GitHub', notes: 'Commit linking.' }
     ],
+    contractHistory: [],
     documents: [
       { id: 'doc-1', name: 'Jira Contract 2023.pdf', type: DocumentType.CONTRACT, uploadDate: new Date('2023-03-15').toISOString(), fileUrl: '#' },
       { id: 'doc-2', name: 'Jira Invoice Mar2024.pdf', type: DocumentType.INVOICE, uploadDate: new Date('2024-03-01').toISOString(), fileUrl: '#' },
@@ -73,6 +74,7 @@ export const MOCK_SOFTWARE: Software[] = [
     integrations: [
       { id: 'int-3', externalIntegrationName: 'Marketo', notes: 'Lead sync.' }
     ],
+    contractHistory: [],
     documents: [
        { id: 'doc-3', name: 'Salesforce MSA.pdf', type: DocumentType.CONTRACT, uploadDate: new Date('2022-07-01').toISOString(), fileUrl: '#' },
     ],
@@ -96,6 +98,7 @@ export const MOCK_SOFTWARE: Software[] = [
     noticePeriod: NoticePeriod.DAYS_30,
     autoRenewal: false,
     integrations: [],
+    contractHistory: [],
     documents: [],
     purchasedBySeat: true,
     seatsPurchased: 10,
@@ -117,6 +120,7 @@ export const MOCK_SOFTWARE: Software[] = [
     noticePeriod: NoticePeriod.DAYS_30,
     autoRenewal: true,
     integrations: [],
+    contractHistory: [],
     documents: [],
     purchasedBySeat: false, // Example of non-seat based
   },

@@ -10,13 +10,16 @@ import EmptyState from '../components/EmptyState';
 import Badge from '../components/Badge';
 import Modal from '../components/Modal';
 import { getSoftwareById, getUsers, getDepartments, getFeatureTags, getAuditsForSoftware, deleteSoftware as apiDeleteSoftware, uploadDocumentToSoftware, deleteDocumentFromSoftware, addIntegrationToSoftware, deleteIntegrationFromSoftware, getSoftwareList } from '../services/apiService';
-import { Software, User, Department, FeatureTag, Audit, DocumentFile, DocumentType, Integration, SoftwareStatus, PaymentFrequency, NoticePeriod, SelectOption, LicenseType } from '../types';
-import { format, differenceInDays } from 'date-fns';
+import { Software, User, Department, FeatureTag, Audit, DocumentFile, DocumentType, Integration, SoftwareStatus, PaymentFrequency, NoticePeriod, SelectOption, LicenseType, ContractHistory } from '../types';
+// Date formatting handled by dateUtils
+import { formatDateSafely, getDaysDifference } from '../utils/dateUtils';
 import { EditIcon, TrashIcon, PlusIcon, ExternalLinkIcon, UploadIcon } from '../constants'; // Make sure icons are in constants
 import FileUpload from '../components/FileUpload';
 import Input from '../components/Input';
 import Textarea from '../components/Textarea';
 import Select from '../components/Select';
+import ContractRenewalModal from '../components/ContractRenewalModal';
+import ContractHistoryCard from '../components/ContractHistoryCard';
 import { DEFAULT_DOCUMENT_TYPES } from '../constants';
 
 const SoftwareDetailPage: React.FC = () => {
@@ -38,7 +41,12 @@ const SoftwareDetailPage: React.FC = () => {
   
   const [showAddIntegrationModal, setShowAddIntegrationModal] = useState(false);
   const [newIntegration, setNewIntegration] = useState<Partial<Integration>>({ externalIntegrationName: '', notes: '' });
+  
+  const [showRenewalModal, setShowRenewalModal] = useState(false);
 
+  const handleRenewalComplete = (updatedSoftware: Software) => {
+    setSoftware(updatedSoftware);
+  };
 
   const fetchSoftwareData = useCallback(async () => {
     if (!id) return;
@@ -182,6 +190,9 @@ const SoftwareDetailPage: React.FC = () => {
         actions={
           isAdmin ? (
             <div className="space-x-2">
+              <Button variant="primary" onClick={() => setShowRenewalModal(true)}>
+                Renew Contract
+              </Button>
               <Link to={`/software/${software.id}/edit`}>
                 <Button variant="outline" leftIcon={<EditIcon />}>Edit</Button>
               </Link>
@@ -201,6 +212,7 @@ const SoftwareDetailPage: React.FC = () => {
               <DetailItem label="Primary Owner" value={owner?.name} />
               <DetailItem label="Total Cost" value={`$${software.cost.toLocaleString()} / ${software.paymentFrequency}`} />
               <DetailItem label="License Type" value={software.licenseType} />
+              <DetailItem label="Cost Center" value={software.costCenterCode} />
               {software.licenseType === LicenseType.PER_USER_SEAT && (
                 <>
                   <DetailItem label="Seats Purchased" value={software.seatsPurchased?.toLocaleString()} />
@@ -263,12 +275,14 @@ const SoftwareDetailPage: React.FC = () => {
 
           <Card title="Renewal & Contract">
             <dl className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-4">
-              <DetailItem label="Renewal Date" value={`${format(new Date(software.renewalDate), 'MMMM d, yyyy')} (${differenceInDays(new Date(software.renewalDate), new Date())} days)`} />
+              <DetailItem label="Renewal Date" value={`${formatDateSafely(software.renewalDate, 'MMMM d, yyyy')} (${getDaysDifference(software.renewalDate)} days)`} />
               <DetailItem label="Notice Period" value={software.noticePeriod} />
-              <DetailItem label="Contract Start Date" value={format(new Date(software.contractStartDate), 'MMMM d, yyyy')} />
+              <DetailItem label="Contract Start Date" value={formatDateSafely(software.contractStartDate, 'MMMM d, yyyy')} />
               <DetailItem label="Auto-Renew" value={software.autoRenewal ? 'Yes' : 'No'} />
             </dl>
           </Card>
+
+          <ContractHistoryCard history={software.contractHistory || []} />
 
           <Card title="Documents" actions={
             isAdmin ? (
@@ -281,7 +295,7 @@ const SoftwareDetailPage: React.FC = () => {
                   <li key={doc.id} className="py-3 flex justify-between items-center">
                     <div>
                       <a href={doc.fileUrl || '#'} target="_blank" rel="noopener noreferrer" className="text-sm font-medium text-brand-blue hover:underline cursor-pointer">{doc.name} <ExternalLinkIcon/></a>
-                      <p className="text-xs text-text-secondary">{doc.type} - Uploaded: {format(new Date(doc.uploadDate), 'MMM d, yyyy')}</p>
+                      <p className="text-xs text-text-secondary">{doc.type} - Uploaded: {formatDateSafely(doc.uploadDate, 'MMM d, yyyy')}</p>
                     </div>
                     {isAdmin && (
                       <Button variant="ghost" size="sm" onClick={() => handleDeleteDocument(doc.id)} className="text-red-500"><TrashIcon /></Button>
@@ -335,8 +349,8 @@ const SoftwareDetailPage: React.FC = () => {
                 <ul className="divide-y divide-gray-200">
                     {audits.map(audit => (
                         <li key={audit.id} className="py-2">
-                            <p className="text-sm font-medium">Scheduled: {format(new Date(audit.scheduledDate), 'MMM d, yyyy')}</p>
-                            {audit.completedDate && <p className="text-xs text-green-600">Completed: {format(new Date(audit.completedDate), 'MMM d, yyyy')}</p>}
+                            <p className="text-sm font-medium">Scheduled: {formatDateSafely(audit.scheduledDate, 'MMM d, yyyy')}</p>
+                            {audit.completedDate && <p className="text-xs text-green-600">Completed: {formatDateSafely(audit.completedDate, 'MMM d, yyyy')}</p>}
                             <p className="text-xs text-text-secondary">{audit.notes || 'No notes.'}</p>
                         </li>
                     ))}
@@ -391,6 +405,15 @@ const SoftwareDetailPage: React.FC = () => {
             <Button variant="primary" onClick={handleAddIntegration}>Add Integration</Button>
         </div>
       </Modal>
+
+      {showRenewalModal && (
+        <ContractRenewalModal
+          software={software}
+          isOpen={showRenewalModal}
+          onClose={() => setShowRenewalModal(false)}
+          onRenewalComplete={handleRenewalComplete}
+        />
+      )}
 
     </>
   );

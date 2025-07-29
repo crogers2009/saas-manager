@@ -28,8 +28,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         setUser(data.user);
         localStorage.setItem('currentUser', JSON.stringify(data.user));
       } catch (error) {
-        // If /me fails, it means the token is invalid or expired, or no token exists.
-        // Clear any stale user data.
+        // Expected when not logged in - don't log as error
+        // Just clear any stale user data silently
         setUser(null);
         localStorage.removeItem('currentUser');
       } finally {

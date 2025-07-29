@@ -6,7 +6,7 @@ const router = express.Router();
 
 // Get all feature tags
 router.get('/', (req, res) => {
-  db.all("SELECT * FROM feature_tags", (err, rows) => {
+  db.all("SELECT * FROM feature_tags ORDER BY name", (err, rows) => {
     if (err) {
       res.status(500).json({ error: err.message });
       return;

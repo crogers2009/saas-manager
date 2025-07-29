@@ -9,7 +9,8 @@ import Badge from '../components/Badge';
 import { getDashboardStats, getSoftwareList, getSoftwareRequests } from '../services/apiService';
 import { Software, SoftwareRequest, SoftwareStatus, RequestStatus } from '../types'; // Added RequestStatus
 import { DashboardIcon, SoftwareIcon, RequestIcon, RenewalIcon, PlusIcon } from '../constants';
-import { format, differenceInDays, addDays } from 'date-fns';
+import { addDays } from 'date-fns';
+import { formatDateSafely, getDaysDifference } from '../utils/dateUtils';
 
 interface DashboardData {
   totalActiveSubscriptions: number;
@@ -69,7 +70,7 @@ const DashboardPage: React.FC = () => {
   }
 
   const getRenewalUrgencyColor = (renewalDateStr: string): 'red' | 'yellow' | 'green' => {
-    const daysUntilRenewal = differenceInDays(new Date(renewalDateStr), new Date());
+    const daysUntilRenewal = getDaysDifference(renewalDateStr);
     if (daysUntilRenewal <= 30) return 'red';
     if (daysUntilRenewal <= 60) return 'yellow';
     return 'green';
@@ -115,10 +116,15 @@ const DashboardPage: React.FC = () => {
               {upcomingRenewals.map(software => (
                 <li key={software.id} className="py-3">
                   <div className="flex items-center justify-between">
-                    <Link to={`/software/${software.id}`} className="text-brand-blue hover:underline font-medium">{software.name}</Link>
-                    <Badge text={format(new Date(software.renewalDate), 'MMM d, yyyy')} color={getRenewalUrgencyColor(software.renewalDate)} />
+                    <div className="flex items-center space-x-2">
+                      <Link to={`/software/${software.id}`} className="text-brand-blue hover:underline font-medium">{software.name}</Link>
+                      {software.autoRenewal && (
+                        <Badge text="Auto" color="blue" />
+                      )}
+                    </div>
+                    <Badge text={formatDateSafely(software.renewalDate, 'MMM d, yyyy')} color={getRenewalUrgencyColor(software.renewalDate)} />
                   </div>
-                  <p className="text-sm text-text-secondary">{software.vendor} - {differenceInDays(new Date(software.renewalDate), new Date())} days</p>
+                  <p className="text-sm text-text-secondary">{software.vendor} - {getDaysDifference(software.renewalDate)} days</p>
                 </li>
               ))}
             </ul>
@@ -144,7 +150,7 @@ const DashboardPage: React.FC = () => {
                     </Link>
                     <Badge text={request.status} color={request.status === RequestStatus.PENDING ? 'yellow' : request.status === RequestStatus.APPROVED ? 'green' : 'red'} />
                   </div>
-                  <p className="text-sm text-text-secondary">Requested on: {format(new Date(request.requestDate), 'MMM d, yyyy')}</p>
+                  <p className="text-sm text-text-secondary">Requested on: {formatDateSafely(request.requestDate, 'MMM d, yyyy')}</p>
                 </li>
               ))}
             </ul>

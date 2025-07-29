@@ -9,7 +9,8 @@ import Badge from '../components/Badge';
 import Select from '../components/Select';
 import { getSoftwareList, getUsers, getDepartments } from '../services/apiService';
 import { Software, User, Department, NoticePeriod, SelectOption, SoftwareStatus } from '../types';
-import { format, differenceInDays, addMonths, startOfMonth, endOfMonth } from 'date-fns';
+import { addMonths, startOfMonth, endOfMonth, differenceInDays, format } from 'date-fns';
+import { formatDateSafely, getDaysDifference, safeParseDateString } from '../utils/dateUtils';
 
 interface RenewalFilter {
   month: string; // "all" or "YYYY-MM"
@@ -50,11 +51,11 @@ const RenewalManagementPage: React.FC = () => {
     const options: SelectOption[] = [{ value: 'all', label: 'All Months' }];
     const uniqueMonths = new Set<string>();
     allSoftware.forEach(s => {
-        const monthYear = format(new Date(s.renewalDate), 'yyyy-MM');
+        const monthYear = formatDateSafely(s.renewalDate, 'yyyy-MM');
         uniqueMonths.add(monthYear);
     });
     Array.from(uniqueMonths).sort().forEach(my => {
-        options.push({ value: my, label: format(new Date(my + '-01'), 'MMMM yyyy') });
+        options.push({ value: my, label: formatDateSafely(my + '-01', 'MMMM yyyy') });
     });
     return options;
   }, [allSoftware]);
@@ -64,7 +65,7 @@ const RenewalManagementPage: React.FC = () => {
   
   const filteredRenewals = useMemo(() => {
     return allSoftware
-      .map(s => ({...s, renewalDateObj: new Date(s.renewalDate)})) // Add renewalDateObj for sorting
+      .map(s => ({...s, renewalDateObj: safeParseDateString(s.renewalDate)})) // Add renewalDateObj for sorting
       .filter(s => {
         const renewalDate = s.renewalDateObj;
         if (filters.month !== 'all') {
@@ -84,7 +85,7 @@ const RenewalManagementPage: React.FC = () => {
   };
   
   const getUrgencyColor = (renewalDateStr: string, noticePeriod: NoticePeriod): 'red' | 'yellow' | 'green' | 'blue' => {
-    const renewalDate = new Date(renewalDateStr);
+    const renewalDate = safeParseDateString(renewalDateStr);
     const today = new Date();
     const daysUntilRenewal = differenceInDays(renewalDate, today);
 
@@ -104,7 +105,7 @@ const RenewalManagementPage: React.FC = () => {
   };
   
   const getNoticeDeadline = (renewalDateStr: string, noticePeriod: NoticePeriod): Date | null => {
-    const renewalDate = new Date(renewalDateStr);
+    const renewalDate = safeParseDateString(renewalDateStr);
     let noticeDays = 0;
     if (noticePeriod === NoticePeriod.DAYS_30) noticeDays = 30;
     else if (noticePeriod === NoticePeriod.DAYS_60) noticeDays = 60;
@@ -150,8 +151,8 @@ const RenewalManagementPage: React.FC = () => {
                   </div>
                   <div>
                     <p className="text-sm font-medium">Renewal Date:</p>
-                    <Badge text={format(new Date(software.renewalDate), 'MMM d, yyyy')} color={getUrgencyColor(software.renewalDate, software.noticePeriod)} />
-                    <p className="text-xs text-text-secondary">{differenceInDays(new Date(software.renewalDate), new Date())} days remaining</p>
+                    <Badge text={formatDateSafely(software.renewalDate, 'MMM d, yyyy')} color={getUrgencyColor(software.renewalDate, software.noticePeriod)} />
+                    <p className="text-xs text-text-secondary">{getDaysDifference(software.renewalDate)} days remaining</p>
                   </div>
                   <div>
                     <p className="text-sm font-medium">Notice Deadline:</p>

@@ -3,6 +3,7 @@ import cors from 'cors';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { initializeDatabase, seedDatabase } from './database.js';
+import { initializeScheduler } from './services/scheduler.js';
 import cookieParser from 'cookie-parser';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -18,6 +19,8 @@ import requestsRouter from './routes/requests.js';
 import auditsRouter from './routes/audits.js';
 import dashboardRouter from './routes/dashboard.js';
 import emailRouter from './routes/email.js';
+import costCentersRouter from './routes/costCenters.js';
+import autoRenewalRouter from './routes/autoRenewal.js';
 import { authenticateUser, isAdmin } from './middleware/auth.js';
 
 const app = express();
@@ -63,6 +66,8 @@ app.use('/api/requests', authenticateUser, requestsRouter);
 app.use('/api/audits', authenticateUser, auditsRouter);
 app.use('/api/dashboard', authenticateUser, dashboardRouter);
 app.use('/api/email', authenticateUser, isAdmin, emailRouter);
+app.use('/api/cost-centers', authenticateUser, costCentersRouter);
+app.use('/api/auto-renewal', authenticateUser, autoRenewalRouter);
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
@@ -88,6 +93,9 @@ const startServer = async () => {
     
     await seedDatabase();
     console.log('Database seeded successfully');
+    
+    // Initialize scheduler for automated tasks
+    initializeScheduler();
     
     app.listen(PORT, () => {
       console.log(`Server is running on http://localhost:${PORT}`);

@@ -4,8 +4,8 @@ import Input from '../components/Input';
 import Modal from '../components/Modal';
 import Card from '../components/Card';
 import { PlusIcon, EditIcon, TrashIcon } from '../constants';
-import { Department } from '../types';
-import { getDepartments, addDepartment, updateDepartment, deleteDepartment } from '../services/apiService';
+import { Department, User, UserRole } from '../types';
+import { getDepartments, addDepartment, updateDepartment, deleteDepartment, apiRequest } from '../services/apiService';
 
 const DepartmentManagementPage: React.FC = () => {
   const [departments, setDepartments] = useState<Department[]>([]);
@@ -14,6 +14,15 @@ const DepartmentManagementPage: React.FC = () => {
   const [editingDepartment, setEditingDepartment] = useState<Department | null>(null);
   const [formData, setFormData] = useState({ name: '' });
   const [error, setError] = useState('');
+
+  // User creation state
+  const [showUserModal, setShowUserModal] = useState(false);
+  const [userFormData, setUserFormData] = useState({
+    name: '',
+    email: '',
+    departmentId: ''
+  });
+  const [userError, setUserError] = useState('');
 
   useEffect(() => {
     loadDepartments();
@@ -76,6 +85,61 @@ const DepartmentManagementPage: React.FC = () => {
     }
   };
 
+  const handleCreateDepartmentHead = (department: Department) => {
+    setUserFormData({
+      name: '',
+      email: '',
+      departmentId: department.id
+    });
+    setUserError('');
+    setShowUserModal(true);
+  };
+
+  const handleEmailChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    let email = e.target.value;
+    setUserFormData(prev => ({ ...prev, email }));
+  };
+
+  const handleEmailBlur = (e: React.FocusEvent<HTMLInputElement>) => {
+    let email = e.target.value;
+    
+    // Auto-append domain on blur if user typed just a username
+    if (email && !email.includes('@')) {
+      email = email + '@firstacceptance.com';
+      setUserFormData(prev => ({ ...prev, email }));
+    }
+  };
+
+  const handleUserSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setUserError('');
+
+    if (!userFormData.name.trim() || !userFormData.email.trim()) {
+      setUserError('Name and email are required');
+      return;
+    }
+
+    try {
+      await apiRequest('/users', {
+        method: 'POST',
+        body: JSON.stringify({
+          name: userFormData.name,
+          email: userFormData.email,
+          role: UserRole.DEPARTMENT_HEAD,
+          departmentIds: [userFormData.departmentId],
+          password: 'firstacceptance',
+          isActive: true
+        })
+      });
+
+      setShowUserModal(false);
+      setUserFormData({ name: '', email: '', departmentId: '' });
+      alert('Department Head created successfully! They will be prompted to change their password on first login.');
+    } catch (err) {
+      setUserError(err instanceof Error ? err.message : 'Failed to create user');
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -104,14 +168,20 @@ const DepartmentManagementPage: React.FC = () => {
       )}
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {departments.map((department) => (
+        {departments.sort((a, b) => a.name.localeCompare(b.name)).map((department) => (
           <Card key={department.id} className="p-6">
             <div className="flex justify-between items-start">
               <div className="flex-1">
                 <h3 className="text-lg font-medium text-gray-900">{department.name}</h3>
-                <p className="text-sm text-gray-500 mt-1">ID: {department.id}</p>
               </div>
               <div className="flex space-x-2 ml-4">
+                <button
+                  onClick={() => handleCreateDepartmentHead(department)}
+                  className="text-green-600 hover:text-green-800 p-1"
+                  title="Create department head"
+                >
+                  <PlusIcon />
+                </button>
                 <button
                   onClick={() => handleEditClick(department)}
                   className="text-blue-600 hover:text-blue-800 p-1"
@@ -170,6 +240,58 @@ const DepartmentManagementPage: React.FC = () => {
             </Button>
             <Button type="submit">
               {editingDepartment ? 'Update' : 'Add'} Department
+            </Button>
+          </div>
+        </form>
+      </Modal>
+
+      <Modal
+        isOpen={showUserModal}
+        onClose={() => setShowUserModal(false)}
+        title="Create Department Head"
+      >
+        <form onSubmit={handleUserSubmit} className="space-y-4">
+          <div className="bg-blue-50 border border-blue-200 text-blue-700 px-4 py-3 rounded">
+            <p className="text-sm">
+              Creating a new Department Head user for: <strong>{departments.find(d => d.id === userFormData.departmentId)?.name}</strong>
+            </p>
+            <p className="text-xs mt-1">
+              Default password will be "firstacceptance". User will be required to change it on first login.
+            </p>
+          </div>
+
+          <Input
+            label="Full Name"
+            value={userFormData.name}
+            onChange={(e) => setUserFormData(prev => ({ ...prev, name: e.target.value }))}
+            placeholder="Enter full name"
+            required
+          />
+
+          <Input
+            label="Email"
+            type="email"
+            value={userFormData.email}
+            onChange={handleEmailChange}
+            onBlur={handleEmailBlur}
+            placeholder="username (will auto-complete to @firstacceptance.com)"
+            required
+          />
+
+          {userError && (
+            <div className="text-red-600 text-sm">{userError}</div>
+          )}
+
+          <div className="flex justify-end space-x-3 pt-4">
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => setShowUserModal(false)}
+            >
+              Cancel
+            </Button>
+            <Button type="submit">
+              Create Department Head
             </Button>
           </div>
         </form>

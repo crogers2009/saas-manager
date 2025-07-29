@@ -165,51 +165,78 @@ const getSoftwareWithRelations = (softwareId, callback) => {
               notes: int.notes
             }));
             
-            // Transform database fields to match frontend expectations
-            const transformedSoftware = {
-              id: software.id,
-              name: software.name,
-              vendor: software.vendor,
-              description: software.description,
-              ownerId: software.owner_id,
-              departmentIds: software.departmentIds,
-              cost: software.cost,
-              paymentFrequency: software.payment_frequency,
-              status: software.status,
-              featureTagIds: software.featureTagIds,
-              renewalDate: software.renewal_date,
-              noticePeriod: software.notice_period,
-              autoRenewal: Boolean(software.auto_renewal),
-              contractStartDate: software.contract_start_date,
-              integrations: software.integrations,
-              documents: software.documents,
-              licenseType: software.license_type || 'Per User/Seat',
-              seatsPurchased: software.seats_purchased,
-              seatsUtilized: software.seats_utilized,
-              usageMetric: software.usage_metric,
-              usageLimit: software.usage_limit,
-              currentUsage: software.current_usage,
-              sitesLicensed: software.sites_licensed,
-              licenseNotes: software.license_notes,
-              accountExecutive: software.account_executive,
-              accountExecutiveEmail: software.account_executive_email,
-              supportWebsite: software.support_website,
-              supportEmail: software.support_email,
-              auditFrequency: software.audit_frequency
-            };
-            
-            callback(null, transformedSoftware);
+            // Get contract history
+            db.all(`SELECT * FROM contract_history 
+                    WHERE software_id = ? 
+                    ORDER BY contract_start_date DESC`,
+              [softwareId], (err, historyRows) => {
+                if (err) {
+                  callback(err, null);
+                  return;
+                }
+                
+                software.contractHistory = historyRows.map(row => ({
+                  id: row.id,
+                  softwareId: row.software_id,
+                  contractStartDate: row.contract_start_date,
+                  contractEndDate: row.contract_end_date,
+                  cost: row.cost,
+                  paymentFrequency: row.payment_frequency,
+                  noticePeriod: row.notice_period,
+                  autoRenewal: Boolean(row.auto_renewal),
+                  status: row.status,
+                  createdAt: row.created_at,
+                  notes: row.notes
+                }));
+                
+                // Transform database fields to match frontend expectations
+                const transformedSoftware = {
+                  id: software.id,
+                  name: software.name,
+                  vendor: software.vendor,
+                  description: software.description,
+                  ownerId: software.owner_id,
+                  departmentIds: software.departmentIds,
+                  cost: software.cost,
+                  paymentFrequency: software.payment_frequency,
+                  status: software.status,
+                  featureTagIds: software.featureTagIds,
+                  renewalDate: software.renewal_date,
+                  noticePeriod: software.notice_period,
+                  autoRenewal: Boolean(software.auto_renewal),
+                  contractStartDate: software.contract_start_date,
+                  integrations: software.integrations,
+                  documents: software.documents,
+                  contractHistory: software.contractHistory,
+                  licenseType: software.license_type || 'Per User/Seat',
+                  seatsPurchased: software.seats_purchased,
+                  seatsUtilized: software.seats_utilized,
+                  usageMetric: software.usage_metric,
+                  usageLimit: software.usage_limit,
+                  currentUsage: software.current_usage,
+                  sitesLicensed: software.sites_licensed,
+                  licenseNotes: software.license_notes,
+                  accountExecutive: software.account_executive,
+                  accountExecutiveEmail: software.account_executive_email,
+                  supportWebsite: software.support_website,
+                  supportEmail: software.support_email,
+                  auditFrequency: software.audit_frequency,
+                  costCenterCode: software.cost_center_code
+                };
+                
+                callback(null, transformedSoftware);
+              });
+            });
           });
         });
       });
     });
-  });
 };
 
 // Get all software (with role-based filtering)
 router.get('/', authenticateUser, (req, res) => {
   const filter = createSoftwareFilter(req.user);
-  const query = `SELECT * FROM software s ${filter.whereClause}`;
+  const query = `SELECT * FROM software s ${filter.whereClause} ORDER BY s.name`;
   
   db.all(query, filter.params, (err, rows) => {
     if (err) {
@@ -377,7 +404,8 @@ router.put('/:id', authenticateUser, (req, res) => {
     accountExecutiveEmail: 'account_executive_email',
     supportWebsite: 'support_website',
     supportEmail: 'support_email',
-    auditFrequency: 'audit_frequency'
+    auditFrequency: 'audit_frequency',
+    costCenterCode: 'cost_center_code'
   };
   
   Object.keys(updates).forEach(key => {
@@ -638,6 +666,193 @@ router.delete('/:id/integrations/:intId', authenticateUser, (req, res) => {
       }
       res.json(software);
     });
+  });
+});
+
+// Renew contract endpoint
+router.post('/:id/renew', authenticateUser, (req, res) => {
+  const { id } = req.params;
+  const {
+    contractStartDate,
+    renewalDate,
+    cost,
+    paymentFrequency,
+    noticePeriod,
+    autoRenewal,
+    notes,
+    // License fields
+    seatsPurchased,
+    seatsUtilized,
+    usageMetric,
+    usageLimit,
+    currentUsage,
+    sitesLicensed,
+    licenseNotes
+  } = req.body;
+
+  // First, get the current software data to archive
+  getSoftwareWithRelations(id, (err, software) => {
+    if (err) {
+      res.status(500).json({ error: err.message });
+      return;
+    }
+    if (!software) {
+      res.status(404).json({ error: 'Software not found' });
+      return;
+    }
+
+    // Check permissions
+    const filter = createSoftwareFilter(req.user);
+    if (filter.whereClause && req.user.role !== 'Administrator') {
+      let query = `SELECT id FROM software s ${filter.whereClause} AND s.id = ?`;
+      let params = [...filter.params, id];
+      
+      db.get(query, params, (err, row) => {
+        if (err || !row) {
+          return res.status(403).json({ error: 'Access denied' });
+        }
+        proceedWithRenewal();
+      });
+    } else {
+      proceedWithRenewal();
+    }
+
+    function proceedWithRenewal() {
+      const historyId = crypto.randomUUID();
+      const now = new Date().toISOString();
+
+      db.serialize(() => {
+        // Create history record for the current contract
+        db.run(`INSERT INTO contract_history (
+          id, software_id, contract_start_date, contract_end_date, cost,
+          payment_frequency, notice_period, auto_renewal, status, created_at, notes
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [historyId, id, software.contractStartDate, software.renewalDate, software.cost,
+         software.paymentFrequency, software.noticePeriod, software.autoRenewal, 
+         'Renewed', now, notes || 'Contract renewed'], (err) => {
+          if (err) {
+            res.status(500).json({ error: err.message });
+            return;
+          }
+
+          // Update the software with new contract terms and license details
+          const updateFields = [
+            'contract_start_date = ?', 'renewal_date = ?', 'cost = ?', 
+            'payment_frequency = ?', 'notice_period = ?', 'auto_renewal = ?'
+          ];
+          const updateValues = [contractStartDate, renewalDate, cost, paymentFrequency, noticePeriod, autoRenewal];
+          
+          // Add license fields to update if provided
+          if (seatsPurchased !== undefined) {
+            updateFields.push('seats_purchased = ?');
+            updateValues.push(seatsPurchased);
+          }
+          if (seatsUtilized !== undefined) {
+            updateFields.push('seats_utilized = ?');
+            updateValues.push(seatsUtilized);
+          }
+          if (usageMetric !== undefined) {
+            updateFields.push('usage_metric = ?');
+            updateValues.push(usageMetric);
+          }
+          if (usageLimit !== undefined) {
+            updateFields.push('usage_limit = ?');
+            updateValues.push(usageLimit);
+          }
+          if (currentUsage !== undefined) {
+            updateFields.push('current_usage = ?');
+            updateValues.push(currentUsage);
+          }
+          if (sitesLicensed !== undefined) {
+            updateFields.push('sites_licensed = ?');
+            updateValues.push(sitesLicensed);
+          }
+          if (licenseNotes !== undefined) {
+            updateFields.push('license_notes = ?');
+            updateValues.push(licenseNotes);
+          }
+          
+          updateValues.push(id);
+          
+          db.run(`UPDATE software SET ${updateFields.join(', ')} WHERE id = ?`, updateValues,
+            (err) => {
+              if (err) {
+                res.status(500).json({ error: err.message });
+                return;
+              }
+
+              // Return updated software data
+              getSoftwareWithRelations(id, (err, updatedSoftware) => {
+                if (err) {
+                  res.status(500).json({ error: err.message });
+                  return;
+                }
+                res.json({ 
+                  message: 'Contract renewed successfully',
+                  software: updatedSoftware
+                });
+              });
+            }
+          );
+        });
+      });
+    }
+  });
+});
+
+// Get contract history for software
+router.get('/:id/contract-history', authenticateUser, (req, res) => {
+  const { id } = req.params;
+
+  // Check permissions first
+  const filter = createSoftwareFilter(req.user);
+  let softwareQuery, softwareParams;
+  
+  if (filter.whereClause) {
+    softwareQuery = `SELECT id FROM software s ${filter.whereClause} AND s.id = ?`;
+    softwareParams = [...filter.params, id];
+  } else {
+    softwareQuery = `SELECT id FROM software WHERE id = ?`;
+    softwareParams = [id];
+  }
+
+  db.get(softwareQuery, softwareParams, (err, software) => {
+    if (err) {
+      res.status(500).json({ error: err.message });
+      return;
+    }
+    if (!software) {
+      res.status(404).json({ error: 'Software not found or access denied' });
+      return;
+    }
+
+    // Get contract history
+    db.all(`SELECT * FROM contract_history 
+            WHERE software_id = ? 
+            ORDER BY contract_start_date DESC`,
+      [id], (err, rows) => {
+        if (err) {
+          res.status(500).json({ error: err.message });
+          return;
+        }
+
+        const history = rows.map(row => ({
+          id: row.id,
+          softwareId: row.software_id,
+          contractStartDate: row.contract_start_date,
+          contractEndDate: row.contract_end_date,
+          cost: row.cost,
+          paymentFrequency: row.payment_frequency,
+          noticePeriod: row.notice_period,
+          autoRenewal: Boolean(row.auto_renewal),
+          status: row.status,
+          createdAt: row.created_at,
+          notes: row.notes
+        }));
+
+        res.json(history);
+      }
+    );
   });
 });
 

@@ -113,7 +113,7 @@ const SoftwareInventoryPage: React.FC = () => {
         />
       ) : (
         <div>
-          {filteredSoftwareList.map(software => (
+          {filteredSoftwareList.sort((a, b) => a.name.localeCompare(b.name)).map(software => (
             <SoftwareListItem
               key={software.id}
               software={software}
